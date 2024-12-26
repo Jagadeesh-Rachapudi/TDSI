@@ -1,83 +1,118 @@
-import os
-from pathlib import Path
 import torch
-from torch.utils.data import Dataset, DataLoader
-import torchaudio
-
+import torch.nn as nn
+import torch.backends.cudnn as cudnn
+from torch.utils.data import DataLoader, Dataset
+from torch.cuda.amp import GradScaler, autocast
+import gc
+import os
+import random
+import json  
+from pathlib import Path
+import matplotlib.pyplot as plt  
+from torch.optim import Adam
 
 class AudioSegmentDataset(Dataset):
-    """
-    A PyTorch Dataset class for loading and processing audio segments.
-    """
-
-    def __init__(self, data_dir: str, sample_rate: int = 16000, transform=None, normalize: bool = True):
+    def __init__(self, data_dir, sample_rate=16000, window_size=2.0, stride=2.0):
         """
         Args:
-            data_dir (str): Directory containing processed audio segments.
-            sample_rate (int): Target sample rate for the audio.
-            transform: Optional transformation to apply on the audio data.
-            normalize (bool): Whether to normalize audio to the range [-1, 1].
+            data_dir (str): Path to the directory containing audio files.
+            sample_rate (int): Sampling rate of the audio.
+            window_size (float): Size of the audio window in seconds.
+            stride (float): Stride size in seconds for segmentation.
         """
-        self.data_dir = Path(data_dir).resolve()  # Ensure absolute path
+        self.data_dir = Path(data_dir)
         self.sample_rate = sample_rate
-        self.audio_files = list(self.data_dir.glob("*.wav"))  # Extend this to handle other formats if needed
-        self.transform = transform
-        self.normalize = normalize
+        self.window_size = int(window_size * sample_rate)
+        self.stride = int(stride * sample_rate)
+        self.files = list(self.data_dir.glob("*.wav"))
 
-        if not self.audio_files:
-            raise ValueError(f"No audio files found in {data_dir}")
+        if not self.files:
+            raise FileNotFoundError(f"No .wav files found in directory: {data_dir}")
 
     def __len__(self):
-        return len(self.audio_files)
+        return len(self.files)
 
     def __getitem__(self, idx):
-        audio_path = self.audio_files[idx]
-        try:
-            # Load audio file
-            audio, sr = torchaudio.load(audio_path)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load audio file {audio_path}: {e}")
+        file_path = self.files[idx]
+        audio = torch.load(file_path)  # Assuming audio files are stored as tensors
 
-        # Resample if necessary
-        if sr != self.sample_rate:
-            resample_transform = torchaudio.transforms.Resample(orig_freq=sr, new_freq=self.sample_rate)
-            audio = resample_transform(audio)
+        # Skip samples shorter than the window size
+        if audio.shape[0] < self.window_size:
+            return None
 
-        # Normalize audio to range [-1, 1] if needed
-        if self.normalize:
-            audio = audio / torch.max(torch.abs(audio))
+        start_idx = random.randint(0, len(audio) - self.window_size)
+        audio_segment = audio[start_idx : start_idx + self.window_size]
+        return audio_segment, 0  # Return audio segment and a dummy label
 
-        # Apply optional transformations
-        if self.transform:
-            audio = self.transform(audio)
+# Custom collate function to handle invalid data points
+def custom_collate_fn(batch):
+    batch = [item for item in batch if item is not None]
+    if not batch:
+        return None
+    return torch.utils.data.dataloader.default_collate(batch)
 
-        return audio, str(audio_path)
+# DataLoader function
+def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=2.0, stride=2.0, shuffle=True, num_workers=0):
+    dataset = AudioSegmentDataset(
+        data_dir=data_dir,
+        sample_rate=sample_rate,
+        window_size=window_size,
+        stride=stride
+    )
+    return DataLoader(
+        dataset=dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        collate_fn=custom_collate_fn,
+        pin_memory=True
+    )
 
+# Define directories for train, validate, and test
+train_data_dir = r"C:\Users\Ritik\Jagadeesh\codes\data\train"
+validate_data_dir = r"C:\Users\Ritik\Jagadeesh\codes\data\validate"
+test_data_dir = r"C:\Users\Ritik\Jagadeesh\codes\data\test"
 
-def get_data_loader(
-    data_dir: str,
-    batch_size: int = 16,
-    shuffle: bool = True,
-    num_workers: int = 4,
-    sample_rate: int = 16000,
-    transform=None,
-    normalize: bool = True,
-):
-    """
-    Create a DataLoader for the processed audio dataset.
+# Parameters for DataLoader
+batch_size = 2
+sample_rate = 16000
+window_size = 2.0  # seconds
+stride = 1.0       # seconds
+num_workers = 2
 
-    Args:
-        data_dir (str): Directory containing processed audio segments.
-        batch_size (int): Batch size for the DataLoader.
-        shuffle (bool): Whether to shuffle the data.
-        num_workers (int): Number of workers for data loading.
-        sample_rate (int): Target sample rate for the audio.
-        transform: Optional transformation to apply on the audio data.
-        normalize (bool): Whether to normalize audio to the range [-1, 1].
+# Initialize DataLoaders
+train_loader = get_dataloader(
+    data_dir=train_data_dir,
+    batch_size=batch_size,
+    sample_rate=sample_rate,
+    window_size=window_size,
+    stride=stride,
+    shuffle=True,
+    num_workers=num_workers
+)
 
-    Returns:
-        DataLoader: A PyTorch DataLoader instance.
-    """
-    dataset = AudioSegmentDataset(data_dir=data_dir, sample_rate=sample_rate, transform=transform, normalize=normalize)
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
-    return data_loader
+validate_loader = get_dataloader(
+    data_dir=validate_data_dir,
+    batch_size=batch_size,
+    sample_rate=sample_rate,
+    window_size=window_size,
+    stride=stride,
+    shuffle=False,
+    num_workers=num_workers
+)
+
+# Test DataLoader
+test_loader = get_dataloader(
+    data_dir=test_data_dir,
+    batch_size=batch_size,
+    sample_rate=sample_rate,
+    window_size=window_size,
+    stride=stride,
+    shuffle=False,
+    num_workers=num_workers
+)
+
+# Check DataLoader sizes
+print(f"Train dataset size: {len(train_loader.dataset)}")
+print(f"Validation dataset size: {len(validate_loader.dataset)}")
+print(f"Test dataset size: {len(test_loader.dataset)}")
