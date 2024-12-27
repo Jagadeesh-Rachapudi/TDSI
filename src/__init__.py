@@ -10,3 +10,6 @@ import json
 from pathlib import Path
 import matplotlib.pyplot as plt  
 from torch.optim import Adam
+```
+
+# This file can be empty or contain package initialization code
