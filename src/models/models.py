@@ -6,10 +6,11 @@ from torch.cuda.amp import GradScaler, autocast
 import gc
 import os
 import random
-import json  
+import json
 from pathlib import Path
-import matplotlib.pyplot as plt  
+import matplotlib.pyplot as plt
 from torch.optim import Adam
+
 # Encoder Module
 class Encoder(nn.Module):
     def __init__(self, input_dim=1, hidden_dim=128, kernel_size=7, num_layers=4):
@@ -31,9 +32,7 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         for layer in self.layers:
-            # print(f"Before layer {i}: {x.shape}")
             x = layer(x)
-            # print(f"After layer {i}: {x.shape}")
         return x
 
 # Decoder Module
@@ -59,9 +58,7 @@ class Decoder(nn.Module):
 
     def forward(self, x):
         for layer in self.layers:
-            # print(f"Before layer {i}: {x.shape}")
             x = layer(x)
-            # print(f"After layer {i}: {x.shape}")
         return x
 
 # AudioSeal Watermarking Model
@@ -91,26 +88,5 @@ class AudioSealWM(nn.Module):
         reconstructed_audio = self.decoder(combined)
         return reconstructed_audio
 
-
-# Initialize the Model
-if __name__ == "__main__":
-    input_dim = 1
-    hidden_dim = 128
-    kernel_size = 7
-    num_layers = 4
-    nbits = 16
-
-    # Create Encoder and Decoder
-    encoder = Encoder(input_dim=input_dim, hidden_dim=hidden_dim, kernel_size=kernel_size, num_layers=num_layers)
-    decoder = Decoder(hidden_dim=hidden_dim, output_dim=input_dim, kernel_size=kernel_size, num_layers=num_layers)
-
-    # Create AudioSeal Model
-    model = AudioSealWM(encoder, decoder, nbits=nbits, hidden_dim=hidden_dim)
-
-    # Test the Model
-    test_audio = torch.randn(8, 1, 16000)  # Batch of 8 audio samples with 16k samples each
-    test_msg = torch.randint(0, 2, (8, nbits))  # Random watermark messages
-
-    reconstructed_audio = model(test_audio, test_msg)
-    print(f"Input audio shape: {test_audio.shape}")
-    print(f"Reconstructed audio shape: {reconstructed_audio.shape}")
+# Export statements
+__all__ = ["Encoder", "Decoder", "AudioSealWM"]

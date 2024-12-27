@@ -6,9 +6,9 @@ from torch.cuda.amp import GradScaler, autocast
 import gc
 import os
 import random
-import json  
+import json
 from pathlib import Path
-import matplotlib.pyplot as plt  
+import matplotlib.pyplot as plt
 from torch.optim import Adam
 
 # Enable cuDNN benchmarking
@@ -134,3 +134,6 @@ def evaluate_batch(model, batch, device, loss_function, nbits=16):
             reconstructed_audio = model(audio, msg)
             loss = loss_function(reconstructed_audio, audio)
     return loss.item()
+
+# Export statements
+__all__ = ["train_model", "evaluate_batch"]

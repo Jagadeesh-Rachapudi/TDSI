@@ -1,16 +1,11 @@
 import torch
 import torch.nn as nn
-import torch.backends.cudnn as cudnn
-from torch.utils.data import DataLoader, Dataset
-from torch.cuda.amp import GradScaler, autocast
 import gc
-import os
 import random
-import json  
+import json
 from pathlib import Path
-import matplotlib.pyplot as plt  
-from torch.optim import Adam
-
+from torch.utils.data import DataLoader, Dataset
+import matplotlib.pyplot as plt
 
 # Function to clear GPU memory
 def clear_gpu_memory():
@@ -84,3 +79,13 @@ def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=2.0, str
         collate_fn=custom_collate_fn,
         pin_memory=True
     )
+
+# Export statements
+__all__ = [
+    "clear_gpu_memory",
+    "save_loss_data",
+    "plot_losses",
+    "custom_collate_fn",
+    "AudioSegmentDataset",
+    "get_dataloader"
+]
