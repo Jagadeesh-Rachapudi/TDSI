@@ -10,7 +10,7 @@ from typing import Optional, Tuple
 import julius
 import torch
 
-from audioseal.libs.audiocraft.modules.seanet import SEANetEncoderKeepDimension
+from SEANet import SEANetEncoderKeepDimension
 
 logger = logging.getLogger("Audioseal")
 
