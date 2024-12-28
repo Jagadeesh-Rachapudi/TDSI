@@ -1,10 +1,5 @@
 import sys
 from pathlib import Path
-
-# Add src directory to the Python path
-sys.path.append(str(Path(__file__).resolve().parents[2]))
-
-# Standard imports
 import gc
 import os
 import random
@@ -16,12 +11,12 @@ from torch.utils.data import DataLoader
 from torch.cuda.amp import GradScaler, autocast
 import matplotlib.pyplot as plt
 from torch.optim import Adam
-
-# Project-specific imports
 from src.models.models import AudioSealWM, Encoder, Decoder
 from src.models.train_loop import train_model
 from src.utils.data_prcocessing import get_dataloader
 from src.utils.utils import clear_gpu_memory, save_loss_data, plot_losses
+
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 
 # Define the loss function
