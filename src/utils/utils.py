@@ -6,65 +6,21 @@ import json
 from pathlib import Path
 from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
-
-# Function to clear GPU memory
-def clear_gpu_memory():
-    torch.cuda.empty_cache()
-    gc.collect()
-
-# Function to save losses as a JSON file
-def save_loss_data(loss_data, filename="loss_data.json"):
-    with open(filename, "w") as json_file:
-        json.dump(loss_data, json_file, indent=4)
-    print(f"Loss data saved to {filename}")
-
-# Function to plot training and validation losses
-def plot_losses(loss_data):
-    if "train_loss" in loss_data and "validation_loss" in loss_data:
-        plt.figure(figsize=(10, 6))
-        plt.plot(loss_data["train_loss"], label="Train Loss")
-        plt.plot(loss_data["validation_loss"], label="Validation Loss")
-        plt.xlabel("Epochs")
-        plt.ylabel("Loss")
-        plt.title("Training and Validation Loss")
-        plt.legend()
-        plt.show()
-    else:
-        print("Loss data does not contain 'train_loss' or 'validation_loss'.")
-
-# Custom collate function for the DataLoader
+from utils.data_prcocessing import AudioSegmentDataset
 def custom_collate_fn(batch):
-    # Handles cases where some data points might be None
+    """
+    Filters out None values from the batch and collates remaining items.
+    """
     batch = [item for item in batch if item is not None]
-    if len(batch) == 0:
-        return None
+    if not batch:
+        return torch.tensor([]), torch.tensor([])
     return torch.utils.data.dataloader.default_collate(batch)
 
-# Dataset class for audio segmentation
-class AudioSegmentDataset(Dataset):
-    def __init__(self, data_dir, sample_rate=16000, window_size=2.0, stride=2.0):
-        self.data_dir = Path(data_dir)
-        self.sample_rate = sample_rate
-        self.window_size = int(window_size * sample_rate)
-        self.stride = int(stride * sample_rate)
-        self.files = list(self.data_dir.glob("*.wav"))
-        if not self.files:
-            raise FileNotFoundError(f"No .wav files found in directory: {data_dir}")
-    
-    def __len__(self):
-        return len(self.files)
 
-    def __getitem__(self, idx):
-        file_path = self.files[idx]
-        audio = torch.load(file_path)  # Assuming audio files are stored as tensors
-        if audio.shape[0] < self.window_size:
-            return None  # Skip samples shorter than window size
-        start_idx = random.randint(0, len(audio) - self.window_size)
-        audio_segment = audio[start_idx:start_idx + self.window_size]
-        return audio_segment, 0  # Assuming a dummy label
-
-# Function to load data with DataLoader
-def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=2.0, stride=2.0, shuffle=True, num_workers=0):
+def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=4.0, stride=4.0, shuffle=True, num_workers=0):
+    """
+    Creates a DataLoader for the dataset with specified parameters.
+    """
     dataset = AudioSegmentDataset(
         data_dir=data_dir,
         sample_rate=sample_rate,
@@ -80,12 +36,52 @@ def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=2.0, str
         pin_memory=True
     )
 
+def compute_sdr(original: torch.Tensor, watermarked: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """
+    Computes the Signal-to-Distortion Ratio (SDR) between original and watermarked signals.
+
+    Args:
+        original (torch.Tensor): Original carrier signal (shape: [batch_size, num_samples]).
+        watermarked (torch.Tensor): Watermarked carrier signal (shape: [batch_size, num_samples]).
+        eps (float): Small value to avoid division by zero.
+
+    Returns:
+        torch.Tensor: SDR value in dB for each signal in the batch.
+    """
+    # Compute distortion (difference between signals)
+    distortion = watermarked - original
+
+    # Signal power: ||C||^2
+    signal_power = torch.sum(original**2, dim=-1)
+
+    # Distortion power: ||C' - C||^2
+    distortion_power = torch.sum(distortion**2, dim=-1) + eps  # Add eps for numerical stability
+
+    # SDR: 10 * log10(signal_power / distortion_power)
+    sdr = 10 * torch.log10(signal_power / distortion_power)
+    return sdr
+
+def loss_function(watermarked_audio, original_audio, sdr_target=30.0):
+    """
+    Generator loss combining SDR-based loss and L1 loss for imperceptibility.
+
+    Args:
+        watermarked_audio (torch.Tensor): Watermarked audio signal.
+        original_audio (torch.Tensor): Original audio signal.
+        sdr_target (float): Target SDR value in dB.
+
+    Returns:
+        torch.Tensor: Combined loss value.
+    """
+    sdr = compute_sdr(original_audio, watermarked_audio)
+    sdr_loss = torch.mean(torch.relu(sdr_target - sdr))  # Penalize SDR below target
+    l1_loss = torch.mean(torch.abs(watermarked_audio - original_audio))
+    return l1_loss + sdr_loss
+
 # Export statements
 __all__ = [
-    "clear_gpu_memory",
-    "save_loss_data",
-    "plot_losses",
     "custom_collate_fn",
-    "AudioSegmentDataset",
-    "get_dataloader"
+    "get_dataloader",
+    "compute_sdr",
+    "loss_function"
 ]

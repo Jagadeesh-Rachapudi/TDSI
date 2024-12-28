@@ -3,82 +3,65 @@ from torch.utils.data import DataLoader, Dataset
 import torchaudio
 from pathlib import Path
 import random
+from src.utils.utils import custom_collate_fn
 
 class AudioSegmentDataset(Dataset):
-    def __init__(self, data_dir, sample_rate=16000, window_size=2.0, stride=2.0, file_extension="wav"):
+    def __init__(self, data_dir, sample_rate=16000, window_size=4.0, stride=4.0, file_extension="wav"):
         """
-        Dataset for loading and segmenting audio files.
-
         Args:
-            data_dir (str): Path to the directory containing audio files.
-            sample_rate (int): Target sampling rate of the audio files.
-            window_size (float): Duration of each audio segment in seconds.
-            stride (float): Stride in seconds for segmenting audio.
-            file_extension (str): File extension of the audio files (default: "wav").
+            data_dir: Directory containing audio files.
+            sample_rate: Target sampling rate for audio.
+            window_size: Window size in seconds for audio chunks.
+            stride: Stride in seconds for sliding the window.
+            file_extension: Extension of audio files (e.g., 'wav').
         """
         self.data_dir = Path(data_dir).resolve()
         self.sample_rate = sample_rate
-        self.window_size = int(window_size * sample_rate)
-        self.stride = int(stride * sample_rate)
+        self.window_size = int(window_size * sample_rate)  # Convert seconds to samples
+        self.stride = int(stride * sample_rate)  # Convert seconds to samples
         self.file_extension = file_extension
         self.audio_files = self.load_audio_files()
 
     def load_audio_files(self):
         """
-        Load audio file paths from the directory.
-
-        Returns:
-            list: List of file paths to audio files.
+        Loads all audio file paths in the directory matching the file extension.
         """
-        audio_files_paths = sorted(
-            [file for file in self.data_dir.rglob(f"*.{self.file_extension.lower()}")]
-        )
-        return audio_files_paths
+        return sorted([file for file in self.data_dir.rglob(f"*.{self.file_extension.lower()}")])
 
     def __len__(self):
+        """
+        Returns the total number of audio files.
+        """
         return len(self.audio_files)
 
     def __getitem__(self, idx):
         """
-        Retrieve an audio segment from a file.
-
-        Args:
-            idx (int): Index of the file.
-
-        Returns:
-            tuple: Audio segment and dummy label (0).
+        Extracts a random chunk from the audio file specified by idx.
         """
         file_path = self.audio_files[idx]
-        try:
-            audio, _ = torchaudio.load(file_path)  # Load audio using torchaudio
-            audio = audio.squeeze(0)  # Remove channel dimension for mono audio
+        waveform, sample_rate = torchaudio.load(file_path)
 
-            # Check if the audio length is sufficient for the window size
-            if len(audio) < self.window_size:
-                return None
+        # Resample if the audio sampling rate doesn't match the target
+        if sample_rate != self.sample_rate:
+            resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=self.sample_rate)
+            waveform = resampler(waveform)
 
-            # Randomly select a start index for the segment
-            start_idx = random.randint(0, len(audio) - self.window_size)
-            audio_segment = audio[start_idx : start_idx + self.window_size]
-            return audio_segment, 0  # Return the segment and dummy label
-        except Exception as e:
-            print(f"Error loading file {file_path}: {e}")
-            return None
+        # Ensure mono audio by averaging channels if stereo
+        if waveform.shape[0] > 1:
+            waveform = torch.mean(waveform, dim=0, keepdim=True)
 
-def custom_collate_fn(batch):
-    """
-    Custom collate function to handle None values in batches.
+        # Handle edge cases where the audio file is shorter than the window size
+        if waveform.shape[1] < self.window_size:
+            padding = self.window_size - waveform.shape[1]
+            waveform = torch.nn.functional.pad(waveform, (0, padding))
 
-    Args:
-        batch (list): Batch of data.
+        # Randomly select a chunk from the audio file
+        max_start_idx = max(0, waveform.shape[1] - self.window_size)
+        start_idx = random.randint(0, max_start_idx)
+        audio_segment = waveform[:, start_idx : start_idx + self.window_size]
 
-    Returns:
-        tuple: Collated batch or empty tensors if batch is empty.
-    """
-    batch = [item for item in batch if item is not None]
-    if not batch:
-        return torch.tensor([]), torch.tensor([])
-    return torch.utils.data.dataloader.default_collate(batch)
+        return audio_segment, 0  # Returning a dummy label for now
+
 
 def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=4.0, stride=4.0, shuffle=True, num_workers=0):
     """
@@ -112,4 +95,4 @@ def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=4.0, str
     )
 
 # Export statements
-__all__ = ["AudioSegmentDataset", "get_dataloader", "custom_collate_fn"]
+__all__ = ["AudioSegmentDataset", "get_dataloader"]
