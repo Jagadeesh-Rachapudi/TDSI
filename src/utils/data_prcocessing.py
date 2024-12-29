@@ -1,9 +1,10 @@
-import torch
-from torch.utils.data import DataLoader, Dataset
-import torchaudio
-from pathlib import Path
 import random
-from src.utils.utils import custom_collate_fn
+from pathlib import Path
+
+import torch
+import torchaudio
+from torch.utils.data import DataLoader, Dataset
+from utils.utility_functions import custom_collate_fn
 
 class AudioSegmentDataset(Dataset):
     def __init__(self, data_dir, sample_rate=16000, window_size=4.0, stride=4.0, file_extension="wav"):

@@ -2,6 +2,7 @@ import torch
 import torchaudio
 from audioseal import AudioSeal
 
+
 def encode_watermark(input_audio_path, output_watermarked_path, message_bits=16, alpha=0.8):
     """Embed a 16-bit watermark into an audio file and save the watermarked audio."""
     # Load the audio file

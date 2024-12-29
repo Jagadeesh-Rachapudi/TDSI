@@ -16,14 +16,15 @@ from torchaudio.functional.filtering import highpass_biquad, treble_biquad
 
 
 def basic_loudness(waveform: torch.Tensor, sample_rate: int) -> torch.Tensor:
-    """This is a simpler loudness function that is more stable.
-    Args:
-        waveform(torch.Tensor): audio waveform of dimension `(..., channels, time)`
-        sample_rate (int): sampling rate of the waveform
-    Returns:
-        loudness loss as a scalar
-    """
+    """Simpler loudness function for stability.
 
+    Args:
+        waveform(torch.Tensor): Audio waveform of dimension `(..., channels, time)`.
+        sample_rate (int): Sampling rate of the waveform.
+
+    Returns:
+        torch.Tensor: Loudness as a scalar.
+    """
     if waveform.size(-2) > 5:
         raise ValueError("Only up to 5 channels are supported.")
     eps = torch.finfo(torch.float32).eps
@@ -45,16 +46,21 @@ def basic_loudness(waveform: torch.Tensor, sample_rate: int) -> torch.Tensor:
     g = g[: energy.size(-2)]
 
     energy_weighted = torch.sum(g.unsqueeze(-1) * energy, dim=-2)
-    # loudness with epsilon for stability. Not as much precision in the very low loudness sections
+    # Loudness with epsilon for stability
     loudness = -0.691 + 10 * torch.log10(energy_weighted + eps)
     return loudness
 
 
 def _unfold(a: torch.Tensor, kernel_size: int, stride: int) -> torch.Tensor:
-    """Given input of size [*OT, T], output Tensor of size [*OT, F, K]
-    with K the kernel size, by extracting frames with the given stride.
-    This will pad the input so that `F = ceil(T / K)`.
-    see https://github.com/pytorch/pytorch/issues/60466
+    """Extract frames with the given stride and kernel size.
+
+    Args:
+        a (torch.Tensor): Input tensor.
+        kernel_size (int): Kernel size for unfolding.
+        stride (int): Stride for unfolding.
+
+    Returns:
+        torch.Tensor: Unfolded tensor.
     """
     *shape, length = a.shape
     n_frames = math.ceil(length / stride)
@@ -67,17 +73,14 @@ def _unfold(a: torch.Tensor, kernel_size: int, stride: int) -> torch.Tensor:
 
 
 class FLoudnessRatio(nn.Module):
-    """FSNR loss.
-
-    Input should be [B, C, T], output is scalar.
+    """Frequency-based Loudness Ratio Loss.
 
     Args:
         sample_rate (int): Sample rate.
-        segment (float or None): Evaluate on chunks of that many seconds. If None, evaluate on
-            entire audio only.
-        overlap (float): Overlap between chunks, i.e. 0.5 = 50 % overlap.
+        segment (float or None): Evaluate on chunks of that many seconds.
+        overlap (float): Overlap between chunks.
         epsilon (float): Epsilon value for numerical stability.
-        n_bands (int): number of mel scale bands that we include
+        n_bands (int): Number of mel-scale bands to include.
     """
     def __init__(
         self,
@@ -112,15 +115,12 @@ class FLoudnessRatio(nn.Module):
 
 
 class TLoudnessRatio(nn.Module):
-    """TSNR loss.
-
-    Input should be [B, C, T], output is scalar.
+    """Time-based Loudness Ratio Loss.
 
     Args:
         sample_rate (int): Sample rate.
-        segment (float or None): Evaluate on chunks of that many seconds. If None, evaluate on
-            entire audio only.
-        overlap (float): Overlap between chunks, i.e. 0.5 = 50 % overlap.
+        segment (float): Segment size in seconds.
+        overlap (float): Overlap between segments.
     """
     def __init__(
         self,
@@ -143,25 +143,22 @@ class TLoudnessRatio(nn.Module):
         stride = int(frame * (1 - self.overlap))
         gt = _unfold(ref_sig, frame, stride).view(-1, 1, frame)
         est = _unfold(out_sig, frame, stride).view(-1, 1, frame)
-        l_noise = self.loudness(gt - est)  # watermark
-        l_ref = self.loudness(gt)  # ground truth
+        l_noise = self.loudness(gt - est)
+        l_ref = self.loudness(gt)
         l_ratio = (l_noise - l_ref).view(-1, B)
         loss = torch.nn.functional.softmax(l_ratio, dim=0) * l_ratio
         return loss.sum()
 
 
 class TFLoudnessRatio(nn.Module):
-    """TF-loudness ratio loss.
-
-    Input should be [B, C, T], output is scalar.
+    """Time-Frequency Loudness Ratio Loss.
 
     Args:
         sample_rate (int): Sample rate.
-        segment (float or None): Evaluate on chunks of that many seconds. If None, evaluate on
-            entire audio only.
-        overlap (float): Overlap between chunks, i.e. 0.5 = 50 % overlap.
-        n_bands (int): number of bands to separate
-        temperature (float): temperature of the softmax step
+        segment (float): Segment size in seconds.
+        overlap (float): Overlap between segments.
+        n_bands (int): Number of frequency bands.
+        temperature (float): Temperature for softmax.
     """
     def __init__(
         self,
@@ -186,7 +183,6 @@ class TFLoudnessRatio(nn.Module):
 
     def forward(self, out_sig: torch.Tensor, ref_sig: torch.Tensor) -> torch.Tensor:
         B, C, T = ref_sig.shape
-
         assert ref_sig.shape == out_sig.shape
         assert C == 1
         assert self.filter is not None
@@ -197,8 +193,8 @@ class TFLoudnessRatio(nn.Module):
         stride = int(frame * (1 - self.overlap))
         gt = _unfold(bands_ref, frame, stride).squeeze(1).contiguous().view(-1, 1, frame)
         est = _unfold(bands_out, frame, stride).squeeze(1).contiguous().view(-1, 1, frame)
-        l_noise = basic_loudness(est - gt, sample_rate=self.sample_rate)  # watermark
-        l_ref = basic_loudness(gt, sample_rate=self.sample_rate)  # ground truth
+        l_noise = basic_loudness(est - gt, sample_rate=self.sample_rate)
+        l_ref = basic_loudness(gt, sample_rate=self.sample_rate)
         l_ratio = (l_noise - l_ref).view(-1, B)
         loss = torch.nn.functional.softmax(l_ratio / self.temperature, dim=0) * l_ratio
         return loss.mean()

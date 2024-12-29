@@ -16,7 +16,6 @@ from models.conv import StreamableConv1d, StreamableConvTranspose1d
 from models.lstm import StreamableLSTM
 
 
-
 class SEANetResnetBlock(nn.Module):
     """Residual block from SEANet model.
 

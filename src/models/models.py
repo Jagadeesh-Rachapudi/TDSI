@@ -10,17 +10,11 @@ from typing import Optional, Tuple
 import julius
 import torch
 
-from models.SEANet import SEANetEncoderKeepDimension, SEANetDecoder
-
+from models.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 
 logger = logging.getLogger("Audioseal")
 
-COMPATIBLE_WARNING = """
-AudioSeal is designed to work at a sample rate 16khz.
-Implicit sampling rate usage is deprecated and will be removed in future version.
-To remove this warning please add this argument to the function call:
-sample_rate = your_sample_rate
-"""
+COMPATIBLE_WARNING = """"""
 
 
 class MsgProcessor(torch.nn.Module):

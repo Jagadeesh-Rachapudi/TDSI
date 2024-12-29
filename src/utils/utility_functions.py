@@ -1,12 +1,16 @@
+import gc
+import json
+import random
+from pathlib import Path
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import gc
-import random
-import json
-from pathlib import Path
 from torch.utils.data import DataLoader, Dataset
-import matplotlib.pyplot as plt
 from utils.data_prcocessing import AudioSegmentDataset
+def get_white_noise(chs: int = 1, num_frames: int = 1):
+    wav = torch.randn(chs, num_frames)
+    return wav
+
 def custom_collate_fn(batch):
     """
     Filters out None values from the batch and collates remaining items.

@@ -1,7 +1,7 @@
 import torch
-from models.models import AudioSealWM, AudioSealDetector
-from models.SEANet import SEANetEncoderKeepDimension, SEANetDecoder
 
+from models.models import AudioSealDetector, AudioSealWM
+from models.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 
 # Configuration
 audio_length = 8000  # 0.5 seconds

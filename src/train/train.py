@@ -1,20 +1,22 @@
-import sys
-from pathlib import Path
 import gc
+import json
 import os
 import random
-import json
-import torch
-import torch.nn as nn
-import torch.backends.cudnn as cudnn
-from torch.utils.data import DataLoader
-from torch.cuda.amp import GradScaler, autocast
+import sys
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import torch
+import torch.backends.cudnn as cudnn
+import torch.nn as nn
+from torch.cuda.amp import GradScaler, autocast
 from torch.optim import Adam
-from src.models.models import AudioSealWM, Encoder, Decoder
+from torch.utils.data import DataLoader
+
+from src.models.models import AudioSealWM, Decoder, Encoder
 from src.train.train_loop import train_model
 from src.utils.data_prcocessing import get_dataloader
-from src.utils.utils import clear_gpu_memory, save_loss_data, plot_losses
+from src.utils.utility_functions import clear_gpu_memory, plot_losses, save_loss_data
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 

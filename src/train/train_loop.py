@@ -1,17 +1,18 @@
-import torch
-import torch.nn as nn
-import torch.backends.cudnn as cudnn
-from torch.utils.data import DataLoader, Dataset
-from torch.cuda.amp import GradScaler, autocast
 import gc
-import os
 import json
+import os
 from pathlib import Path
-import matplotlib.pyplot as plt
-from torch.optim import Adam
 
-from models import AudioSealWM  # Watermarking Model
+import matplotlib.pyplot as plt
+import torch
+import torch.backends.cudnn as cudnn
+import torch.nn as nn
+from torch.cuda.amp import GradScaler, autocast
+from torch.optim import Adam
+from torch.utils.data import DataLoader, Dataset
+
 from losses import CombinedLoss  # Custom loss function combining all losses
+from models import AudioSealWM  # Watermarking Model
 
 # Enable cuDNN benchmarking
 cudnn.benchmark = True
