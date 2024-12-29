@@ -10,7 +10,8 @@ from typing import Optional, Tuple
 import julius
 import torch
 
-from SEANet import SEANetEncoderKeepDimension
+from models.SEANet import SEANetEncoderKeepDimension, SEANetDecoder
+
 
 logger = logging.getLogger("Audioseal")
 

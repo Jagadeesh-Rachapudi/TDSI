@@ -12,11 +12,9 @@ import typing as tp
 import numpy as np
 import torch.nn as nn
 
-from conv import (
-    StreamableConv1d,
-    StreamableConvTranspose1d,
-)
-from lstm import StreamableLSTM
+from models.conv import StreamableConv1d, StreamableConvTranspose1d
+from models.lstm import StreamableLSTM
+
 
 
 class SEANetResnetBlock(nn.Module):

@@ -5,11 +5,13 @@ from torch.utils.data import DataLoader, Dataset
 from torch.cuda.amp import GradScaler, autocast
 import gc
 import os
-import random
 import json
 from pathlib import Path
 import matplotlib.pyplot as plt
 from torch.optim import Adam
+
+from models import AudioSealWM  # Watermarking Model
+from losses import CombinedLoss  # Custom loss function combining all losses
 
 # Enable cuDNN benchmarking
 cudnn.benchmark = True
@@ -52,9 +54,11 @@ def train_model(model, train_loader, optimizer, device, loss_function, num_epoch
 
             optimizer.zero_grad()
             with autocast():
-                reconstructed_audio = model(audio, msg)
-                loss = loss_function(reconstructed_audio, audio)
+                # Forward pass
+                watermarked_audio = model(audio, message=msg)
+                loss = loss_function(watermarked_audio, audio, msg)
 
+            # Backward pass
             loss.backward()
             optimizer.step()
 
@@ -78,8 +82,9 @@ def train_model(model, train_loader, optimizer, device, loss_function, num_epoch
                     val_msg = torch.randint(0, 2, (batch_size, nbits), device=device)
 
                     with autocast():
-                        reconstructed_audio = model(val_audio, val_msg)
-                        val_loss += loss_function(reconstructed_audio, val_audio).item()
+                        # Validation forward pass
+                        watermarked_audio = model(val_audio, message=val_msg)
+                        val_loss += loss_function(watermarked_audio, val_audio, val_msg).item()
 
             avg_val_loss = val_loss / len(validation_loader)
             loss_data["validation_loss"].append(avg_val_loss)
@@ -131,8 +136,9 @@ def evaluate_batch(model, batch, device, loss_function, nbits=16):
         msg = torch.randint(0, 2, (batch_size, nbits), device=device)
 
         with autocast():
-            reconstructed_audio = model(audio, msg)
-            loss = loss_function(reconstructed_audio, audio)
+            # Forward pass for evaluation
+            watermarked_audio = model(audio, message=msg)
+            loss = loss_function(watermarked_audio, audio, msg)
     return loss.item()
 
 # Export statements
