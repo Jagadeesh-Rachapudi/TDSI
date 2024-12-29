@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 import torchaudio
 from torch.utils.data import DataLoader, Dataset
-from utils.utility_functions import custom_collate_fn
+# from utils.utility_functions import custom_collate_fn
 
 class AudioSegmentDataset(Dataset):
     def __init__(self, data_dir, sample_rate=16000, window_size=4.0, stride=4.0, file_extension="wav"):
@@ -63,6 +63,9 @@ class AudioSegmentDataset(Dataset):
 
         return audio_segment, 0  # Returning a dummy label for now
 
+def custom_collate_fn(batch):
+    from utils.utility_functions import custom_collate_fn as collate_fn
+    return collate_fn(batch)
 
 def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=4.0, stride=4.0, shuffle=True, num_workers=0):
     """
