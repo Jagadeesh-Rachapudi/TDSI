@@ -1,17 +1,18 @@
 import os
 import shutil
 import subprocess
+import platform
 
 # Define the repository URL and target folders
 repo_url = "https://huggingface.co/datasets/Jagadeesh9580/semi-Voxpopuli"
 output_folders = {
-    "train": ".train",
-    "test": ".test",
-    "validation": ".validate"
+    "train": "./train",
+    "test": "./test",
+    "validate": "./validate"
 }
 
 def clone_repo(repo_url):
-    # Clone the repository
+    """Clone the repository."""
     repo_name = repo_url.split("/")[-1]
     if os.path.exists(repo_name):
         print(f"Repository '{repo_name}' already exists. Removing it first...")
@@ -21,48 +22,50 @@ def clone_repo(repo_url):
     subprocess.run(["git", "clone", repo_url], check=True)
     return repo_name
 
-def organize_dataset(repo_name):
-    try:
-        # Navigate to the cloned repository folder
-        repo_path = os.path.join(os.getcwd(), repo_name)
-        
-        # Check if the repository folder exists
-        if not os.path.exists(repo_path):
-            raise FileNotFoundError(f"Repository folder '{repo_name}' not found.")
-        
-        # Create folders for splits
-        for folder in output_folders.values():
-            os.makedirs(folder, exist_ok=True)
-
-        # Move files to respective folders
-        for split, folder in output_folders.items():
-            split_file = os.path.join(repo_path, f"{split}.csv")
-            if os.path.exists(split_file):
-                shutil.move(split_file, os.path.join(folder, f"{split}.csv"))
-                print(f"Moved {split}.csv to {folder}")
+def remove_git_folder(repo_name):
+    """Remove the .git folder using subprocess."""
+    git_folder_path = os.path.join(os.getcwd(), repo_name, ".git")
+    if os.path.exists(git_folder_path):
+        print("Removing .git folder...")
+        try:
+            if platform.system() == "Windows":
+                subprocess.run(["cmd", "/c", "rmdir", "/s", "/q", git_folder_path], check=True)
             else:
-                print(f"{split}.csv not found in the repository.")
+                subprocess.run(["rm", "-rf", git_folder_path], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to remove .git folder: {e}")
+            raise
 
-        # Clean up the cloned repository folder
-        print("Removing cloned repository folder...")
-        shutil.rmtree(repo_path)
+def organize_dataset(repo_name):
+    """Organize dataset files into respective folders."""
+    try:
+        # Define source paths
+        repo_path = os.path.join(os.getcwd(), repo_name, "data")
+        if not os.path.exists(repo_path):
+            raise FileNotFoundError(f"Repository data folder '{repo_path}' not found.")
+
+        # Create output folders and move data
+        for split, target_folder in output_folders.items():
+            source_path = os.path.join(repo_path, split)
+            if os.path.exists(source_path):
+                os.makedirs(target_folder, exist_ok=True)
+                print(f"Moving {split} data to {target_folder}...")
+                for file in os.listdir(source_path):
+                    shutil.move(os.path.join(source_path, file), target_folder)
+            else:
+                print(f"No data found for '{split}' in the repository.")
+
+        # Remove the .git folder using subprocess
+        remove_git_folder(repo_name)
+
+        # Remove the cloned repository folder
+        print(f"Removing the cloned repository folder: {os.path.join(os.getcwd(), repo_name)}")
+        shutil.rmtree(os.path.join(os.getcwd(), repo_name))
 
     except Exception as e:
         print(f"An error occurred during dataset organization: {e}")
 
-def cleanup_unrelated_files():
-    # Remove unrelated files and folders in the current directory
-    current_dir = os.getcwd()
-    for item in os.listdir(current_dir):
-        item_path = os.path.join(current_dir, item)
-        if item not in output_folders.values():
-            print(f"Removing {item_path}...")
-            if os.path.isfile(item_path):
-                os.remove(item_path)
-            elif os.path.isdir(item_path):
-                shutil.rmtree(item_path)
-
-if __name__ == "__main__":
+def main():
     try:
         # Clone the repository
         repo_name = clone_repo(repo_url)
@@ -70,11 +73,11 @@ if __name__ == "__main__":
         # Organize the dataset
         organize_dataset(repo_name)
 
-        # Clean up any remaining unrelated files
-        cleanup_unrelated_files()
-
         print("Dataset processing complete.")
     except subprocess.CalledProcessError as e:
-        print(f"Git command failed: {e}")
+        print(f"Subprocess error: {e}")
     except Exception as e:
         print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()

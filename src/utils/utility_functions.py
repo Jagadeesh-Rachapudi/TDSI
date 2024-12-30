@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from utils.data_prcocessing import AudioSegmentDataset
+
 def get_white_noise(chs: int = 1, num_frames: int = 1):
     wav = torch.randn(chs, num_frames)
     return wav
