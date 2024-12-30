@@ -89,8 +89,6 @@ if __name__ == "__main__":
             data_dir=train_data_dir,
             batch_size=batch_size,
             sample_rate=audio_length,  # Pass total length for sampling
-            window_size=1.0,          # 1-second window
-            stride=0.5,               # 50% overlap
             shuffle=True,
             num_workers=4,
         )
@@ -99,8 +97,6 @@ if __name__ == "__main__":
             data_dir=validate_data_dir,
             batch_size=batch_size,
             sample_rate=audio_length,
-            window_size=1.0,
-            stride=0.5,
             shuffle=False,
             num_workers=4,
         )
