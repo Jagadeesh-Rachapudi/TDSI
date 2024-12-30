@@ -14,7 +14,8 @@ from models.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 
 logger = logging.getLogger("Audioseal")
 
-COMPATIBLE_WARNING = """"""
+COMPATIBLE_WARNING = """
+"""
 
 
 class MsgProcessor(torch.nn.Module):
