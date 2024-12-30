@@ -5,10 +5,10 @@ from src.trainFolder.trainLoop import train
 from models.models import AudioSealDetector, AudioSealWM , MsgProcessor
 from models.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from utils.data_prcocessing import get_dataloader
-from losses import compute_detection_loss,compute_decoding_loss ,compute_perceptual_loss
+from src.losses.loss import compute_detection_loss,compute_decoding_loss ,compute_perceptual_loss
 
 # Configuration
-num_epochs = 50
+num_epochs = 100
 batch_size = 1
 audio_length = 4000
 learning_rate = 1e-4
@@ -17,9 +17,9 @@ latent_dim = 128
 
 
 # Data paths
-train_data_dir = Path(r"/content/semi-Voxpopuli/data/train").resolve()
-validate_data_dir = Path(r"/content/semi-Voxpopuli/data/train").resolve()
-# validate_data_dir = Path(r"D:\TDSI\data\data\test").resolve()
+train_data_dir = Path(r"../../data/train").resolve()
+test_data_dir = Path(r"../../data/test").resolve()
+validate_data_dir = Path(r"../../data/validate").resolve()
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     generator = AudioSealWM(
         encoder=encoder,
         decoder=decoder,
-        msg_processor=msg_processor  # Custom message processor can be added if required
+        msg_processor=msg_processor  #Custom message processor can be added if required
     ).to(device)
 
     # Initialize detector (AudioSealDetector)
@@ -81,6 +81,14 @@ if __name__ == "__main__":
             num_workers=4,
         )
 
+        test_loader = get_dataloader(
+            data_dir=test_data_dir,
+            batch_size=batch_size,
+            sample_rate=audio_length,
+            shuffle=False,
+            num_workers=4,
+        )
+
         validate_loader = get_dataloader(
             data_dir=validate_data_dir,
             batch_size=batch_size,
@@ -88,6 +96,7 @@ if __name__ == "__main__":
             shuffle=False,
             num_workers=4,
         )
+
     except FileNotFoundError as e:
         print(f"Error initializing DataLoaders: {e}")
         exit(1)

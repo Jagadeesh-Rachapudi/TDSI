@@ -39,14 +39,12 @@ def compute_detection_loss(positive, negative, mask, p_weight=1.0, n_weight=1.0)
 def compute_decoding_loss(positive, mask, message, temperature, loss_type="bce"):
     """
     Compute decoding loss.
-
     Args:
         positive: Predictions for watermarked samples [bsz, 2+nbits, time_steps].
         mask: Mask for valid regions [bsz, 1, time_steps].
         message: Original watermark message [bsz, nbits].
         temperature: Temperature for loss computation.
         loss_type: Type of loss ("bce" or "mse").
-
     Returns:
         Loss value.
     """
