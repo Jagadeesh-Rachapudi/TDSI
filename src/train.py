@@ -71,14 +71,7 @@ if __name__ == "__main__":
     optimizer_g = Adam(generator.parameters(), lr=learning_rate, weight_decay=1e-4)
     optimizer_d = Adam(detector.parameters(), lr=learning_rate, weight_decay=1e-4)
 
-    # Define perceptual loss functions
-    perceptual_loss_fns = {
-        "l1": torch.nn.L1Loss(),
-        "mspec": torch.nn.MSELoss(),  # Placeholder for Multi-Scale Mel-Spectrogram Loss
-        "adv": torch.nn.MSELoss(),    # Placeholder for Adversarial Loss
-        "loud": torch.nn.MSELoss(),   # Placeholder for Loudness Loss
-    }
-
+    
     # Define the localization and watermarking loss functions
     localization_loss_fn = torch.nn.BCELoss()
     wm_loss_fn = torch.nn.MSELoss()
@@ -123,7 +116,7 @@ if __name__ == "__main__":
             detector=detector,
             train_loader=train_loader,
             val_loader=validate_loader,
-            perceptual_loss_fns=perceptual_loss_fns,
+            compute_perceptual_loss=compute_perceptual_loss,
             localization_loss_fn=localization_loss_fn,
             wm_loss_fn=wm_loss_fn,
             optimizer_g=optimizer_g,
