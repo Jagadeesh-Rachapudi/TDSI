@@ -10,15 +10,15 @@ from losses import compute_detection_loss,compute_decoding_loss ,compute_percept
 # Configuration
 num_epochs = 50
 batch_size = 1
-audio_length = 8000
+audio_length = 4000
 learning_rate = 1e-4
 nbits = 32
 latent_dim = 128
 
 
 # Data paths
-train_data_dir = Path(r"D:\TDSI\data\data\train").resolve()
-validate_data_dir = Path(r"D:\TDSI\data\data\test").resolve()
+train_data_dir = Path(r"/content/semi-Voxpopuli/data/train").resolve()
+validate_data_dir = Path(r"/content/semi-Voxpopuli/data/train").resolve()
 # validate_data_dir = Path(r"D:\TDSI\data\data\test").resolve()
 
 # Device configuration
@@ -71,11 +71,6 @@ if __name__ == "__main__":
     optimizer_g = Adam(generator.parameters(), lr=learning_rate, weight_decay=1e-4)
     optimizer_d = Adam(detector.parameters(), lr=learning_rate, weight_decay=1e-4)
 
-    
-    # Define the localization and watermarking loss functions
-    localization_loss_fn = torch.nn.BCELoss()
-    wm_loss_fn = torch.nn.MSELoss()
-
     # Initialize DataLoaders
     try:
         train_loader = get_dataloader(
@@ -116,9 +111,6 @@ if __name__ == "__main__":
             detector=detector,
             train_loader=train_loader,
             val_loader=validate_loader,
-            compute_perceptual_loss=compute_perceptual_loss,
-            localization_loss_fn=localization_loss_fn,
-            wm_loss_fn=wm_loss_fn,
             optimizer_g=optimizer_g,
             optimizer_d=optimizer_d,
             device=device,
@@ -126,7 +118,7 @@ if __name__ == "__main__":
             compute_detection_loss=compute_detection_loss,
             compute_decoding_loss=compute_decoding_loss,
             compute_perceptual_loss=compute_perceptual_loss,
-            checkpoint_path="D:\\TDSI\\checkpoints",
+            checkpoint_path=".\checkpoints",
             log_interval=10,
         )
     except Exception as e:
