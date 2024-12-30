@@ -5,7 +5,7 @@ from trainFolder.train import train
 from models.models import AudioSealDetector, AudioSealWM , MsgProcessor
 from models.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from utils.data_prcocessing import get_dataloader
-from Losses.wmloss import compute_detection_loss,compute_decoding_loss ,compute_perceptual_loss
+from losses import compute_detection_loss,compute_decoding_loss ,compute_perceptual_loss
 
 # Configuration
 num_epochs = 50
