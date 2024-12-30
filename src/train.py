@@ -2,29 +2,24 @@ import torch
 from torch.optim import Adam
 from pathlib import Path
 from trainFolder.train import train
-from models.models import AudioSealDetector, AudioSealWM
+from models.models import AudioSealDetector, AudioSealWM , MsgProcessor
 from models.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from utils.data_prcocessing import get_dataloader
+from Losses.wmloss import compute_detection_loss,compute_decoding_loss ,compute_perceptual_loss
 
 # Configuration
-num_epochs = 600
-batch_size = 32
-audio_length = 16000
+num_epochs = 50
+batch_size = 1
+audio_length = 8000
 learning_rate = 1e-4
 nbits = 32
 latent_dim = 128
-loss_weights = {
-    "l1": 0.1,
-    "mspec": 2.0,
-    "adv": 4.0,
-    "loud": 10.0,
-    "loc": 10.0,
-    "dec": 1.0,
-}
+
 
 # Data paths
 train_data_dir = Path(r"D:\TDSI\data\data\train").resolve()
 validate_data_dir = Path(r"D:\TDSI\data\data\test").resolve()
+# validate_data_dir = Path(r"D:\TDSI\data\data\test").resolve()
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -49,11 +44,16 @@ if __name__ == "__main__":
         ratios=[8, 5, 4, 2],
     ).to(device)
 
+    msg_processor = MsgProcessor(
+    nbits=32,       # Number of bits for the watermark message
+    hidden_size=128 # Must match the encoder's latent dimension
+    ).to(device)
+
     # Initialize generator (AudioSealWM)
     generator = AudioSealWM(
         encoder=encoder,
         decoder=decoder,
-        msg_processor=None  # Custom message processor can be added if required
+        msg_processor=msg_processor  # Custom message processor can be added if required
     ).to(device)
 
     # Initialize detector (AudioSealDetector)
@@ -134,12 +134,9 @@ if __name__ == "__main__":
             optimizer_d=optimizer_d,
             device=device,
             num_epochs=num_epochs,
-            lambda_1=loss_weights["l1"],
-            lambda_mspec=loss_weights["mspec"],
-            lambda_adv=loss_weights["adv"],
-            lambda_loud=loss_weights["loud"],
-            lambda_loc=loss_weights["loc"],
-            lambda_dec=loss_weights["dec"],
+            compute_detection_loss=compute_detection_loss,
+            compute_decoding_loss=compute_decoding_loss,
+            compute_perceptual_loss=compute_perceptual_loss,
             checkpoint_path="D:\\TDSI\\checkpoints",
             log_interval=10,
         )

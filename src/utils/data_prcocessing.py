@@ -4,22 +4,18 @@ from pathlib import Path
 import torch
 import torchaudio
 from torch.utils.data import DataLoader, Dataset
-# from utils.utility_functions import custom_collate_fn
 
-class AudioSegmentDataset(Dataset):
-    def __init__(self, data_dir, sample_rate=16000, window_size=4.0, stride=4.0, file_extension="wav"):
+
+class AudioDataset(Dataset):
+    def __init__(self, data_dir, sample_rate=16000, file_extension="wav"):
         """
         Args:
             data_dir: Directory containing audio files.
             sample_rate: Target sampling rate for audio.
-            window_size: Window size in seconds for audio chunks.
-            stride: Stride in seconds for sliding the window.
             file_extension: Extension of audio files (e.g., 'wav').
         """
         self.data_dir = Path(data_dir).resolve()
         self.sample_rate = sample_rate
-        self.window_size = int(window_size * sample_rate)  # Convert seconds to samples
-        self.stride = int(stride * sample_rate)  # Convert seconds to samples
         self.file_extension = file_extension
         self.audio_files = self.load_audio_files()
 
@@ -37,7 +33,7 @@ class AudioSegmentDataset(Dataset):
 
     def __getitem__(self, idx):
         """
-        Extracts a random chunk from the audio file specified by idx.
+        Loads the entire audio file specified by idx.
         """
         file_path = self.audio_files[idx]
         waveform, sample_rate = torchaudio.load(file_path)
@@ -51,23 +47,18 @@ class AudioSegmentDataset(Dataset):
         if waveform.shape[0] > 1:
             waveform = torch.mean(waveform, dim=0, keepdim=True)
 
-        # Handle edge cases where the audio file is shorter than the window size
-        if waveform.shape[1] < self.window_size:
-            padding = self.window_size - waveform.shape[1]
-            waveform = torch.nn.functional.pad(waveform, (0, padding))
+        return waveform, 0  # Returning a dummy label for now
 
-        # Randomly select a chunk from the audio file
-        max_start_idx = max(0, waveform.shape[1] - self.window_size)
-        start_idx = random.randint(0, max_start_idx)
-        audio_segment = waveform[:, start_idx : start_idx + self.window_size]
-
-        return audio_segment, 0  # Returning a dummy label for now
 
 def custom_collate_fn(batch):
-    from utils.utility_functions import custom_collate_fn as collate_fn
-    return collate_fn(batch)
+    # Dummy implementation of a custom collate function (replace if needed)
+    waveforms, labels = zip(*batch)
+    waveforms = torch.nn.utils.rnn.pad_sequence(waveforms, batch_first=True)  # Pad waveforms to the same length
+    labels = torch.tensor(labels)
+    return waveforms, labels
 
-def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=4.0, stride=4.0, shuffle=True, num_workers=0):
+
+def get_dataloader(data_dir, batch_size, sample_rate=16000, shuffle=True, num_workers=0):
     """
     Create a DataLoader for the dataset.
 
@@ -75,19 +66,15 @@ def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=4.0, str
         data_dir (str): Path to the dataset directory.
         batch_size (int): Batch size.
         sample_rate (int): Target sampling rate.
-        window_size (float): Duration of each audio segment in seconds.
-        stride (float): Stride in seconds for segmenting audio.
         shuffle (bool): Whether to shuffle the data.
         num_workers (int): Number of worker processes for loading data.
 
     Returns:
         DataLoader: Torch DataLoader for the dataset.
     """
-    dataset = AudioSegmentDataset(
+    dataset = AudioDataset(
         data_dir=data_dir,
-        sample_rate=sample_rate,
-        window_size=window_size,
-        stride=stride
+        sample_rate=sample_rate
     )
     return DataLoader(
         dataset=dataset,
@@ -98,5 +85,6 @@ def get_dataloader(data_dir, batch_size, sample_rate=16000, window_size=4.0, str
         pin_memory=True
     )
 
+
 # Export statements
-__all__ = ["AudioSegmentDataset", "get_dataloader"]
+__all__ = ["AudioDataset", "get_dataloader"]

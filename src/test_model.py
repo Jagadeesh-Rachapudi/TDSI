@@ -5,7 +5,7 @@ from models.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 
 # Configuration
 audio_length = 8000  # 0.5 seconds
-batch_size = 2       # Batch size
+batch_size = 20       # Batch size
 nbits = 32           # Number of bits in the watermark message
 latent_dim = 128     # Latent space dimensionality
 
@@ -59,6 +59,8 @@ with torch.no_grad():
 # Detect watermark and decode message
 with torch.no_grad():
     detection_score, decoded_message_logits = detector(watermarked_audio)
+    print("shape of decoded_message", decoded_message_logits.shape)
+    print("shape of detection score", detection_score.shape)
 
 # Extract the bits from the logits
 decoded_message = (decoded_message_logits > 0.5).int()  # Convert logits to binary bits

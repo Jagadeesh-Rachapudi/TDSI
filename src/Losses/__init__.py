@@ -1,10 +1,23 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-"""Loss related classes and functions. In particular the loss balancer from
-EnCodec, and the usual spectral losses."""
+"""
+Loss-related classes and functions.
+
+This module provides various loss functions required for training and evaluating the AudioSeal model.
+- `Balancer`: Balances gradients when combining multiple losses.
+- `TFLoudnessRatio`: Computes time-frequency loudness loss.
+- `SISNR`: Computes Scale-Invariant Signal-to-Noise Ratio loss.
+- Spectrogram Losses:
+  - `MelSpectrogramL1Loss`: L1 loss on Mel-spectrograms.
+  - `MultiScaleMelSpectrogramLoss`: Multi-scale spectrogram loss.
+- STFT Losses:
+  - `LogSTFTMagnitudeLoss`: Log magnitude loss for STFT.
+  - `MRSTFTLoss`: Multi-resolution STFT loss.
+  - `SpectralConvergenceLoss`: Measures the spectral convergence loss.
+  - `STFTLoss`: Single-resolution STFT loss.
+- Watermark Losses:
+  - `WMDetectionLoss`: Loss for watermark detection.
+  - `WMMbLoss`: Loss for decoding multi-bit watermarks.
+"""
+
 
 # flake8: noqa
 from .balancer import Balancer
