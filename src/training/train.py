@@ -1,12 +1,12 @@
 import torch
 from torch.optim import Adam
 from pathlib import Path
-from src.trainFolder.trainLoop import train
-from models.models import AudioSealDetector, AudioSealWM, MsgProcessor
-from models.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
+from src.training.trainLoop import train
+from allModels.models import AudioSealDetector, AudioSealWM, MsgProcessor
+from allModels.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from utils.data_prcocessing import get_dataloader
 from src.losses.loss import compute_detection_loss, compute_decoding_loss, compute_perceptual_loss
-
+import utils.utility_functions as masker
 # Configuration
 num_epochs = 100
 batch_size = 1
@@ -134,6 +134,7 @@ if __name__ == "__main__":
             compute_perceptual_loss=compute_perceptual_loss,
             checkpoint_path="./checkpoints",
             log_path="./logs/losses.csv",
+            masker=masker,
         )
     except Exception as e:
         print(f"An error occurred during training: {e}")
