@@ -1,191 +1,189 @@
 import torch
 from tqdm import tqdm
-import random
-import json
+from datetime import datetime
 from pathlib import Path
-from torch.nn.utils.rnn import pad_sequence
-
+import random
 
 def train(
-    generator,                    # Watermark generator model
-    detector,                     # Watermark detector model
-    train_loader,                 # DataLoader for training dataset
-    val_loader,                   # DataLoader for validation dataset
-    optimizer_g,                  # Optimizer for generator
-    optimizer_d,                  # Optimizer for detector
-    compute_detection_loss,       # Function to compute detection loss
-    compute_decoding_loss,        # Function to compute decoding loss
-    compute_perceptual_loss,      # Function to compute perceptual loss
-    window_size=0.25,             # Reduced window size in seconds for chunking
-    stride=0.125,                 # Reduced stride in seconds for chunking
-    batch_size=16,                # Reduced batch size for processing
-    device="cuda",                # Device for training (default: "cuda")
-    num_epochs=5,                 # Reduced number of epochs for demonstration
-    patience=5,                   # Early stopping patience
-    checkpoint_path="./checkpoints",  # Path to save model checkpoints
-    log_interval=10,              # Interval for logging
+    generator,
+    detector,
+    train_loader,
+    val_loader,
+    optimizer_g,
+    optimizer_d,
+    compute_detection_loss,
+    compute_decoding_loss,
+    compute_perceptual_loss,
+    masker,
+    batch_size=32,
+    device="cuda",
+    num_epochs=50,
+    patience=10,
+    checkpoint_path="../../checkpoints",
+    log_path="../../logs/losses.csv",
 ):
+    # Move models to device
     generator.to(device)
     detector.to(device)
 
     # Create checkpoint directory if it doesn't exist
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
 
-    # Initialize logging
-    log_path = Path("logs.json")
-    logs = {"training": [], "validation": []}
-    if log_path.exists():
-        with open(log_path, "r") as f:
-            logs = json.load(f)
+    # Initialize CSV logging
+    initialize_csv(log_path)
 
+    # Record start date and time
+    start_date = datetime.now().strftime("%Y-%m-%d")
+    start_time = datetime.now().strftime("%H:%M:%S")
+
+    # Training metadata
     best_val_loss = float("inf")
     epochs_without_improvement = 0
 
-    # Calculate chunk parameters
-    chunk_size = int(window_size * 16000)  # Convert window size to samples
-    stride_size = int(stride * 16000)      # Convert stride size to samples
-
     for epoch in range(num_epochs):
         print(f"Epoch {epoch + 1}/{num_epochs}")
-        train_loss_g = 0.0
-        train_loss_d = 0.0
+        train_loss_g, train_loss_d = 0.0, 0.0
+        val_loss_g, val_loss_d = 0.0, 0.0
 
         generator.train()
         detector.train()
 
-        for batch_idx, full_audio in enumerate(tqdm(train_loader)):
-            if isinstance(full_audio, list) and len(full_audio) == 0:
-                continue
+        # Training loop
+        for batch_idx, (audio_chunks, labels) in enumerate(tqdm(train_loader)):
+            # Ensure batch size is fixed at 32
+            assert audio_chunks.size(0) == batch_size, "Batch size must be 32."
 
-            if isinstance(full_audio, list):
-                full_audio = pad_sequence(full_audio, batch_first=True)
+            audio_chunks, labels = audio_chunks.to(device), labels.to(device)
 
-            full_audio = full_audio.to(device)
+            # Split the batch into SetA and SetB
+            setA = audio_chunks.clone()
+            setB = audio_chunks.clone()
 
-            # Pad short audio to meet chunk_size
-            if full_audio.size(2) < chunk_size:
-                pad_length = chunk_size - full_audio.size(2)
-                full_audio = torch.nn.functional.pad(full_audio, (0, pad_length))
+            # Process first half of SetA through watermark generator
+            first_half_setA = setA[:batch_size // 2]
+            first_half_labels = labels[:batch_size // 2]
+            watermarked_chunks = generator(first_half_setA, message=first_half_labels)
 
-            # Chunk full audio
-            chunks = []
-            for i in range(full_audio.size(0)):
-                for j in range(0, full_audio.size(2) - chunk_size + 1, stride_size):
-                    chunks.append(full_audio[i:i+1, :, j:j+chunk_size])
+            # Delete the second half of SetA
+            setA = watermarked_chunks
 
-            if len(chunks) == 0:
-                continue
+            # Compute perceptual loss and backpropagate for generator
+            perceptual_loss = compute_perceptual_loss(first_half_setA, watermarked_chunks)
+            optimizer_g.zero_grad()
+            perceptual_loss.backward()
+            optimizer_g.step()
 
-            chunks = torch.cat(chunks, dim=0)
+            # Process first half of SetB (bypass watermarking)
+            setB = setB[batch_size // 2:]  # Retain only the second half
 
-            watermarked_chunks = chunks[:batch_size]
-            non_watermarked_chunks = chunks[batch_size:]
+            # Mask first half of SetA
+            last_chunk_setB = setB[-1:]  # Reference chunk from SetB
+            masked_chunks = []
+            for i in range(setA.size(0)):
+                P_mask = random.uniform(0, 1)
+                P_size = random.uniform(0.1, 0.4)
+                P_type = random.uniform(0, 1)
+                masked_chunk, _ = masker(last_chunk_setB, setA[i], P_mask, P_size, P_type)
+                masked_chunks.append(masked_chunk)
+            setA = torch.stack(masked_chunks)
 
-            # Process through the generator
-            half_watermarked = watermarked_chunks[:batch_size // 2]
-            watermarked_audio = generator(half_watermarked, message=torch.randint(0, 2, (batch_size // 2, 32), device=device))
+            # Concatenate masked SetA with SetB
+            concatenated_set = torch.cat((setA, setB), dim=0)
 
-            # Concatenate watermarked and non-watermarked audio
-            set1 = torch.cat((watermarked_audio, half_watermarked), dim=0)
-            set2 = torch.cat((non_watermarked_chunks[:batch_size // 2], non_watermarked_chunks[batch_size // 2:]), dim=0)
-            final_input_to_detector = torch.cat((set1, set2), dim=0)
+            # Send concatenated set to the detector
+            decoded_output, detection_scores = detector(concatenated_set)
 
-            # Pass through the detector
-            decoded_message, detection_scores = detector(final_input_to_detector)
-
-            # Compute losses
-            perceptual_loss = compute_perceptual_loss(half_watermarked, watermarked_audio)
+            # Compute losses for the detector
             detection_loss = compute_detection_loss(
-                positive=detection_scores[:batch_size],
-                negative=detection_scores[batch_size:],
-                mask=torch.ones_like(detection_scores[:batch_size]),
+                positive=detection_scores[:batch_size // 2],
+                negative=detection_scores[batch_size // 2:],
+                mask=torch.ones_like(detection_scores[:batch_size // 2]),
                 p_weight=1.0,
                 n_weight=1.0,
             )
             decoding_loss = compute_decoding_loss(
-                positive=decoded_message[:batch_size],
-                mask=torch.ones_like(decoded_message[:batch_size]),
-                message=torch.randint(0, 2, (batch_size // 2, 32), device=device),
+                positive=decoded_output[:batch_size // 2],
+                mask=torch.ones_like(decoded_output[:batch_size // 2]),
+                message=labels[:batch_size // 2],
                 temperature=0.1,
                 loss_type="bce",
             )
 
-            # Generator and detector losses
-            loss_g = perceptual_loss
             loss_d = detection_loss + decoding_loss
 
-            # Backpropagation
-            optimizer_g.zero_grad()
-            loss_g.backward()
-            optimizer_g.step()
-
+            # Backpropagate for detector
             optimizer_d.zero_grad()
             loss_d.backward()
             optimizer_d.step()
 
-            train_loss_g += loss_g.item()
+            # Track losses
+            train_loss_g += perceptual_loss.item()
             train_loss_d += loss_d.item()
 
         # Validation loop
-        val_loss_g = 0.0
-        val_loss_d = 0.0
         generator.eval()
         detector.eval()
-
         with torch.no_grad():
-            for val_batch_idx, val_audio in enumerate(val_loader):
-                if isinstance(val_audio, list):
-                    if len(val_audio) == 0:
-                        continue
-                    val_audio = pad_sequence(val_audio, batch_first=True)
+            for val_batch_idx, (val_chunks, val_labels) in enumerate(val_loader):
+                val_chunks, val_labels = val_chunks.to(device), val_labels.to(device)
 
-                val_audio = val_audio.to(device)
+                # Split the batch into SetA and SetB
+                setA = val_chunks.clone()
+                setB = val_chunks.clone()
 
-                # Pad short audio for validation
-                if val_audio.size(2) < chunk_size:
-                    pad_length = chunk_size - val_audio.size(2)
-                    val_audio = torch.nn.functional.pad(val_audio, (0, pad_length))
+                # Process SetA and SetB
+                watermarked_chunks = generator(setA[:batch_size // 2], message=val_labels[:batch_size // 2])
+                setA = watermarked_chunks
+                setB = setB[batch_size // 2:]
 
-                chunks = []
-                for i in range(val_audio.size(0)):
-                    for j in range(0, val_audio.size(2) - chunk_size + 1, stride_size):
-                        chunks.append(val_audio[i:i+1, :, j:j+chunk_size])
+                # Compute perceptual loss for validation
+                val_perceptual_loss = compute_perceptual_loss(setA[:batch_size // 2], watermarked_chunks)
 
-                if len(chunks) == 0:
-                    continue
+                # Mask SetA
+                last_chunk_setB = setB[-1:]
+                masked_chunks = []
+                for i in range(setA.size(0)):
+                    P_mask = random.uniform(0, 1)
+                    P_size = random.uniform(0.1, 0.4)
+                    P_type = random.uniform(0, 1)
+                    masked_chunk, _ = masker(last_chunk_setB, setA[i], P_mask, P_size, P_type)
+                    masked_chunks.append(masked_chunk)
+                setA = torch.stack(masked_chunks)
 
-                chunks = torch.cat(chunks, dim=0)
-                watermarked_chunks = chunks[:batch_size]
-                non_watermarked_chunks = chunks[batch_size:]
+                # Concatenate and send to detector
+                concatenated_set = torch.cat((setA, setB), dim=0)
+                decoded_output, detection_scores = detector(concatenated_set)
 
-                half_watermarked = watermarked_chunks[:batch_size // 2]
-                watermarked_audio = generator(half_watermarked, message=torch.randint(0, 2, (batch_size // 2, 32), device=device))
-
-                set1 = torch.cat((watermarked_audio, half_watermarked), dim=0)
-                set2 = torch.cat((non_watermarked_chunks[:batch_size // 2], non_watermarked_chunks[batch_size // 2:]), dim=0)
-                final_input_to_detector = torch.cat((set1, set2), dim=0)
-
-                decoded_message, detection_scores = detector(final_input_to_detector)
-
-                perceptual_loss = compute_perceptual_loss(half_watermarked, watermarked_audio)
+                # Compute losses
                 detection_loss = compute_detection_loss(
-                    positive=detection_scores[:batch_size],
-                    negative=detection_scores[batch_size:],
-                    mask=torch.ones_like(detection_scores[:batch_size]),
+                    positive=detection_scores[:batch_size // 2],
+                    negative=detection_scores[batch_size // 2:],
+                    mask=torch.ones_like(detection_scores[:batch_size // 2]),
                     p_weight=1.0,
                     n_weight=1.0,
                 )
-
-                val_loss_g += perceptual_loss.item()
+                val_loss_g += val_perceptual_loss.item()
                 val_loss_d += detection_loss.item()
 
+        # Compute averages and log results
+        train_loss_g /= len(train_loader)
+        train_loss_d /= len(train_loader)
         val_loss_g /= len(val_loader)
         val_loss_d /= len(val_loader)
+
+        train_accuracy = (1 - train_loss_g) * 100  # Hypothetical metric
+        val_accuracy = (1 - val_loss_g) * 100  # Hypothetical metric
+
+        # Update CSV file
+        update_csv(
+            log_path, start_date, start_time, epoch + 1,
+            train_accuracy, val_accuracy,
+            train_loss_g, train_loss_d, decoding_loss.item(),
+            val_loss_g, val_loss_d, detection_loss.item()
+        )
+
+        # Save best model
         val_loss_total = val_loss_g + val_loss_d
-
-        print(f"Validation: Generator Loss = {val_loss_g:.4f}, Detector Loss = {val_loss_d:.4f}")
-
-        # Save the best model
         if val_loss_total < best_val_loss:
             best_val_loss = val_loss_total
             torch.save({
