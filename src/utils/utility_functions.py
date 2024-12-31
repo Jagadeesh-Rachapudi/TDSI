@@ -9,12 +9,13 @@ from torch.utils.data import DataLoader, Dataset
 from utils.data_prcocessing import AudioSegmentDataset
 import csv
 from pathlib import Path
+import torch
+
 
 def get_white_noise(chs: int = 1, num_frames: int = 1):
     wav = torch.randn(chs, num_frames)
     return wav
 
-import torch
 
 def masker(reference_chunk, chunk, P_mask, P_size, P_type):
     """

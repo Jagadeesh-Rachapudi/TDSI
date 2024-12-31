@@ -2,10 +2,10 @@ import torch
 from torch.optim import Adam
 from pathlib import Path
 from src.trainFolder.trainLoop import train
-from models.models import AudioSealDetector, AudioSealWM , MsgProcessor
+from models.models import AudioSealDetector, AudioSealWM, MsgProcessor
 from models.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from utils.data_prcocessing import get_dataloader
-from src.losses.loss import compute_detection_loss,compute_decoding_loss ,compute_perceptual_loss
+from src.losses.loss import compute_detection_loss, compute_decoding_loss, compute_perceptual_loss
 
 # Configuration
 num_epochs = 100
@@ -15,11 +15,13 @@ learning_rate = 1e-4
 nbits = 32
 latent_dim = 128
 
-
 # Data paths
-train_data_dir = Path(r"../../data/train").resolve()
-test_data_dir = Path(r"../../data/test").resolve()
-validate_data_dir = Path(r"../../data/validate").resolve()
+train_data_dir = Path(r"../../data/train/chunks").resolve()
+train_csv = Path(r"../../data/train/train.csv").resolve()
+test_data_dir = Path(r"../../data/test/chunks").resolve()
+test_csv = Path(r"../../data/test/test.csv").resolve()
+validate_data_dir = Path(r"../../data/validate/chunks").resolve()
+validate_csv = Path(r"../../data/validate/validate.csv").resolve()
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,15 +47,15 @@ if __name__ == "__main__":
     ).to(device)
 
     msg_processor = MsgProcessor(
-    nbits=32,       # Number of bits for the watermark message
-    hidden_size=128 # Must match the encoder's latent dimension
+        nbits=32,  # Number of bits for the watermark message
+        hidden_size=128,  # Must match the encoder's latent dimension
     ).to(device)
 
     # Initialize generator (AudioSealWM)
     generator = AudioSealWM(
         encoder=encoder,
         decoder=decoder,
-        msg_processor=msg_processor  #Custom message processor can be added if required
+        msg_processor=msg_processor,  # Custom message processor can be added if required
     ).to(device)
 
     # Initialize detector (AudioSealDetector)
@@ -64,7 +66,7 @@ if __name__ == "__main__":
         n_residual_layers=3,
         ratios=[8, 5, 4, 2],
         output_dim=latent_dim,
-        nbits=nbits
+        nbits=nbits,
     ).to(device)
 
     # Initialize optimizers
@@ -75,14 +77,16 @@ if __name__ == "__main__":
     try:
         train_loader = get_dataloader(
             data_dir=train_data_dir,
+            csv_file=train_csv,
             batch_size=batch_size,
-            sample_rate=audio_length,  # Pass total length for sampling
+            sample_rate=audio_length,
             shuffle=True,
             num_workers=4,
         )
 
         test_loader = get_dataloader(
             data_dir=test_data_dir,
+            csv_file=test_csv,
             batch_size=batch_size,
             sample_rate=audio_length,
             shuffle=False,
@@ -91,6 +95,7 @@ if __name__ == "__main__":
 
         validate_loader = get_dataloader(
             data_dir=validate_data_dir,
+            csv_file=validate_csv,
             batch_size=batch_size,
             sample_rate=audio_length,
             shuffle=False,
@@ -127,8 +132,8 @@ if __name__ == "__main__":
             compute_detection_loss=compute_detection_loss,
             compute_decoding_loss=compute_decoding_loss,
             compute_perceptual_loss=compute_perceptual_loss,
-            checkpoint_path=".\checkpoints",
-            log_interval=10,
+            checkpoint_path="./checkpoints",
+            log_path="./logs/losses.csv",
         )
     except Exception as e:
         print(f"An error occurred during training: {e}")
