@@ -1,112 +1,114 @@
-import csv
-from pathlib import Path
-
-import torch
-import torchaudio
-from torch.utils.data import DataLoader, Dataset
-
-
-import torchaudio
-from torch.utils.data import Dataset
-from pathlib import Path
-import csv
-import torch
+import os
 import random
+import wave
+import contextlib
+from pathlib import Path
+import torch
+from torch.utils.data import DataLoader, Dataset
+from pydub import AudioSegment
 
 class LazyAudioDataset(Dataset):
-    def __init__(self, data_dir, csv_file, sample_rate=16000, file_extension="wav", chunk_duration=0.5):
+    def __init__(self, data_dir, sample_rate=16000, chunk_duration=0.5, file_extension="mp3"):
         """
         Args:
             data_dir: Directory containing audio files.
-            csv_file: Path to the CSV file with labels for each audio file.
             sample_rate: Target sampling rate for audio.
-            file_extension: Extension of audio files (e.g., 'wav').
             chunk_duration: Duration of each chunk in seconds.
+            file_extension: Extension of input audio files (e.g., 'mp3').
         """
         self.data_dir = Path(data_dir).resolve()
-        self.csv_file = Path(csv_file).resolve()
         self.sample_rate = sample_rate
-        self.file_extension = file_extension
         self.chunk_duration = chunk_duration
-        self.audio_files, self.labels = self.load_audio_files_and_labels()
-
-    def load_audio_files_and_labels(self):
-        """
-        Loads audio file paths and their corresponding labels from the CSV file.
-        """
-        audio_files = []
-        labels = {}
-
-        with open(self.csv_file, mode="r") as f:
-            reader = csv.reader(f)
-            for row in reader:
-                filename, label = row
-                labels[filename] = int(label)
-
-        for file in self.data_dir.rglob(f"*.{self.file_extension.lower()}"):
-            filename = file.name
-            if filename in labels:
-                audio_files.append((file, labels[filename]))
-
-        return audio_files, labels
+        self.file_extension = file_extension
+        self.audio_files = list(self.data_dir.rglob(f"*.{self.file_extension.lower()}"))
 
     def __len__(self):
-        """
-        Returns the total number of chunks across all audio files.
-        """
-        total_chunks = 0
-        for file_path, _ in self.audio_files:
-            metadata = torchaudio.info(file_path)
-            num_chunks = int(metadata.num_frames / (self.chunk_duration * self.sample_rate))
-            total_chunks += num_chunks
-        return total_chunks
+        return len(self.audio_files)
 
     def __getitem__(self, idx):
         """
-        Lazily loads the audio file, extracts the corresponding chunk, and retrieves its label.
+        Lazily loads and processes an audio file.
         """
-        chunk_size = int(self.chunk_duration * self.sample_rate)
-        file_idx = 0
-        current_chunk = idx
+        file_path = self.audio_files[idx]
 
-        # Identify which file and chunk the index corresponds to
-        while current_chunk >= 0:
-            metadata = torchaudio.info(self.audio_files[file_idx][0])
-            num_chunks = int(metadata.num_frames / chunk_size)
-            if current_chunk < num_chunks:
-                break
-            current_chunk -= num_chunks
-            file_idx += 1
+        # Convert to .wav and ensure 1 channel
+        wav_file_path = self.convert_to_wav(file_path)
 
-        file_path, _ = self.audio_files[file_idx]
-        start_frame = current_chunk * chunk_size
+        # Check the duration of the audio
+        with contextlib.closing(wave.open(wav_file_path, 'r')) as wav_file:
+            frame_rate = wav_file.getframerate()
+            num_channels = wav_file.getnchannels()
+            duration = wav_file.getnframes() / float(frame_rate)
 
-        # Lazily load only the required chunk
-        waveform, sample_rate = torchaudio.load(
-            file_path, frame_offset=start_frame, num_frames=chunk_size
-        )
+        if frame_rate != self.sample_rate or num_channels != 1:
+            raise ValueError(f"Audio file {wav_file_path} does not meet requirements.")
+
+        if duration > self.chunk_duration:
+            # Chop audio into 0.5-second chunks
+            chunks = self.chop_audio(wav_file_path)
+            return [self.load_audio(chunk) for chunk in chunks]
+        elif duration == self.chunk_duration:
+            return self.load_audio(wav_file_path)
+        else:
+            raise ValueError(f"Audio file {wav_file_path} is less than {self.chunk_duration} seconds.")
+
+    def convert_to_wav(self, file_path):
+        """
+        Converts an audio file to .wav format with a single channel and 16kHz sampling rate.
+        """
+        wav_file_path = file_path.with_suffix('.wav')
+        audio = AudioSegment.from_file(file_path)
+        audio = audio.set_frame_rate(self.sample_rate).set_channels(1)
+        audio.export(wav_file_path, format="wav")
+        return wav_file_path
+
+    def chop_audio(self, file_path):
+        """
+        Splits an audio file into 0.5-second chunks.
+        """
+        audio = AudioSegment.from_file(file_path)
+        chunk_length_ms = int(self.chunk_duration * 1000)
+        chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
+        chunk_paths = []
+
+        for idx, chunk in enumerate(chunks):
+            if len(chunk) == chunk_length_ms:  # Ensure chunk is exactly 0.5 seconds
+                chunk_path = file_path.with_name(f"{file_path.stem}_chunk{idx}.wav")
+                chunk.export(chunk_path, format="wav")
+                chunk_paths.append(chunk_path)
+
+        return chunk_paths
+
+    def load_audio(self, file_path):
+        """
+        Loads an audio file and generates a random 32-bit label.
+        """
+        waveform, sample_rate = torchaudio.load(file_path)
+        label = random.getrandbits(32)
 
         if sample_rate != self.sample_rate:
             resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=self.sample_rate)
             waveform = resampler(waveform)
 
-        if waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-
-        # Generate a random 32-bit label
-        label = random.getrandbits(32)
-
         return waveform, label
-
 
 
 def custom_collate_fn(batch):
     """
-    Custom collate function to handle variable-length audio files.
+    Custom collate function to handle variable-length or multiple chunks.
     """
-    waveforms, labels = zip(*batch)
+    waveforms = []
+    labels = []
 
-    # Pad all waveforms to the length of the longest waveform in the batch
+    for item in batch:
+        if isinstance(item, list):
+            # Flatten nested lists (e.g., from chunks)
+            waveforms.extend([i[0] for i in item])
+            labels.extend([i[1] for i in item])
+        else:
+            waveforms.append(item[0])
+            labels.append(item[1])
+
     max_length = max([waveform.shape[-1] for waveform in waveforms])
     padded_waveforms = torch.zeros((len(waveforms), 1, max_length))
 
@@ -117,13 +119,12 @@ def custom_collate_fn(batch):
     return padded_waveforms, labels
 
 
-def get_dataloader(data_dir, csv_file, batch_size, sample_rate=16000, shuffle=True, num_workers=0):
+def get_dataloader(data_dir, batch_size, sample_rate=16000, shuffle=True, num_workers=0):
     """
     Create a DataLoader for the dataset.
 
     Args:
         data_dir (str): Path to the dataset directory.
-        csv_file (str): Path to the CSV file with labels.
         batch_size (int): Batch size.
         sample_rate (int): Target sampling rate.
         shuffle (bool): Whether to shuffle the data.
@@ -134,7 +135,6 @@ def get_dataloader(data_dir, csv_file, batch_size, sample_rate=16000, shuffle=Tr
     """
     dataset = LazyAudioDataset(
         data_dir=data_dir,
-        csv_file=csv_file,
         sample_rate=sample_rate
     )
     return DataLoader(
