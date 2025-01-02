@@ -6,112 +6,100 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader, Dataset
 from pydub import AudioSegment
+import torchaudio
+
+import os
+import random
+import torch
+import torchaudio
+from torch.utils.data import Dataset
+
 
 class LazyAudioDataset(Dataset):
-    def __init__(self, data_dir, sample_rate=16000, chunk_duration=0.5, file_extension="mp3"):
+    def __init__(self, data_dir, sample_rate=16000, chunk_duration=0.5):
         """
         Args:
             data_dir: Directory containing audio files.
             sample_rate: Target sampling rate for audio.
             chunk_duration: Duration of each chunk in seconds.
-            file_extension: Extension of input audio files (e.g., 'mp3').
         """
-        self.data_dir = Path(data_dir).resolve()
+        self.data_dir = data_dir
         self.sample_rate = sample_rate
         self.chunk_duration = chunk_duration
-        self.file_extension = file_extension
-        self.audio_files = list(self.data_dir.rglob(f"*.{self.file_extension.lower()}"))
+        self.audio_files = self._find_audio_files()
+
+        if not self.audio_files:
+            raise FileNotFoundError(f"No MP3 files found in {self.data_dir}")
+
+        print(f"Found {len(self.audio_files)} MP3 files.")
+
+    def _find_audio_files(self):
+        return [
+            os.path.join(root, file)
+            for root, _, files in os.walk(self.data_dir)
+            for file in files
+            if file.endswith(".mp3")
+        ]
 
     def __len__(self):
-        return len(self.audio_files)
+        total_chunks = 0
+        chunk_size = int(self.chunk_duration * self.sample_rate)
+        for file_path in self.audio_files:
+            metadata = torchaudio.info(file_path)
+            num_chunks = int(metadata.num_frames / chunk_size)
+            total_chunks += num_chunks
+        return total_chunks
 
     def __getitem__(self, idx):
-        """
-        Lazily loads and processes an audio file.
-        """
-        file_path = self.audio_files[idx]
+        chunk_size = int(self.chunk_duration * self.sample_rate)
+        file_idx = 0
+        current_chunk = idx
 
-        # Convert to .wav and ensure 1 channel
-        wav_file_path = self.convert_to_wav(file_path)
+        while current_chunk >= 0:
+            metadata = torchaudio.info(self.audio_files[file_idx])
+            num_chunks = int(metadata.num_frames / chunk_size)
+            if current_chunk < num_chunks:
+                break
+            current_chunk -= num_chunks
+            file_idx += 1
 
-        # Check the duration of the audio
-        with contextlib.closing(wave.open(wav_file_path, 'r')) as wav_file:
-            frame_rate = wav_file.getframerate()
-            num_channels = wav_file.getnchannels()
-            duration = wav_file.getnframes() / float(frame_rate)
+        file_path = self.audio_files[file_idx]
+        start_frame = current_chunk * chunk_size
 
-        if frame_rate != self.sample_rate or num_channels != 1:
-            raise ValueError(f"Audio file {wav_file_path} does not meet requirements.")
-
-        if duration > self.chunk_duration:
-            # Chop audio into 0.5-second chunks
-            chunks = self.chop_audio(wav_file_path)
-            return [self.load_audio(chunk) for chunk in chunks]
-        elif duration == self.chunk_duration:
-            return self.load_audio(wav_file_path)
-        else:
-            raise ValueError(f"Audio file {wav_file_path} is less than {self.chunk_duration} seconds.")
-
-    def convert_to_wav(self, file_path):
-        """
-        Converts an audio file to .wav format with a single channel and 16kHz sampling rate.
-        """
-        wav_file_path = file_path.with_suffix('.wav')
-        audio = AudioSegment.from_file(file_path)
-        audio = audio.set_frame_rate(self.sample_rate).set_channels(1)
-        audio.export(wav_file_path, format="wav")
-        return wav_file_path
-
-    def chop_audio(self, file_path):
-        """
-        Splits an audio file into 0.5-second chunks.
-        """
-        audio = AudioSegment.from_file(file_path)
-        chunk_length_ms = int(self.chunk_duration * 1000)
-        chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
-        chunk_paths = []
-
-        for idx, chunk in enumerate(chunks):
-            if len(chunk) == chunk_length_ms:  # Ensure chunk is exactly 0.5 seconds
-                chunk_path = file_path.with_name(f"{file_path.stem}_chunk{idx}.wav")
-                chunk.export(chunk_path, format="wav")
-                chunk_paths.append(chunk_path)
-
-        return chunk_paths
-
-    def load_audio(self, file_path):
-        """
-        Loads an audio file and generates a random 32-bit label.
-        """
-        waveform, sample_rate = torchaudio.load(file_path)
-        label = random.getrandbits(32)
+        waveform, sample_rate = torchaudio.load(
+            file_path, frame_offset=start_frame, num_frames=chunk_size
+        )
 
         if sample_rate != self.sample_rate:
             resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=self.sample_rate)
             waveform = resampler(waveform)
 
+        if waveform.shape[0] > 1:  # Convert to mono
+            waveform = torch.mean(waveform, dim=0, keepdim=True)
+
+        # Pad shorter chunks to the desired length
+        if waveform.shape[1] < chunk_size:
+            pad_length = chunk_size - waveform.shape[1]
+            waveform = torch.nn.functional.pad(waveform, (0, pad_length))
+
+        print(f"Waveform shape: {waveform.shape}")
+
+        label = random.randint(0, 1)  # Assign a random label for simplicity
         return waveform, label
+
 
 
 def custom_collate_fn(batch):
     """
     Custom collate function to handle variable-length or multiple chunks.
     """
-    waveforms = []
-    labels = []
+    waveforms, labels = zip(*batch)
 
-    for item in batch:
-        if isinstance(item, list):
-            # Flatten nested lists (e.g., from chunks)
-            waveforms.extend([i[0] for i in item])
-            labels.extend([i[1] for i in item])
-        else:
-            waveforms.append(item[0])
-            labels.append(item[1])
-
+    # Determine the maximum length in the batch
     max_length = max([waveform.shape[-1] for waveform in waveforms])
     padded_waveforms = torch.zeros((len(waveforms), 1, max_length))
 
+    # Pad each waveform to the maximum length
     for i, waveform in enumerate(waveforms):
         padded_waveforms[i, :, :waveform.shape[-1]] = waveform
 

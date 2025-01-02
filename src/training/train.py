@@ -1,6 +1,8 @@
-import sys
-print("\n".join(sys.path))
+import torchaudio
+torchaudio.set_audio_backend("ffmpeg")
 
+import sys
+# print("\n".join(sys.path))
 
 import torch
 from torch.optim import Adam
@@ -16,18 +18,18 @@ from src.utils.utility_functions import initialize_csv
 
 # Configuration
 num_epochs = 100
-batch_size = 1
+batch_size = 32
 audio_length = 4000
 learning_rate = 1e-4
 nbits = 32
 latent_dim = 128
 
 # Data paths
-train_data_dir = Path(r"../../data/train/chunks").resolve()
+train_data_dir = Path(r"D:\TDSI\data\train").resolve()
 # train_csv = Path(r"../../data/train/train.csv").resolve()
-test_data_dir = Path(r"../../data/test/chunks").resolve()
+test_data_dir = Path(r"D:\TDSI\data\test").resolve()
 # test_csv = Path(r"../../data/test/test.csv").resolve()
-validate_data_dir = Path(r"../../data/validate/chunks").resolve()
+validate_data_dir = Path(r"D:\TDSI\data\validate").resolve()
 # validate_csv = Path(r"../../data/validate/validate.csv").resolve()
 
 # Device configuration
