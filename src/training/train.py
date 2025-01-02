@@ -25,11 +25,11 @@ nbits = 32
 latent_dim = 128
 
 # Data paths
-train_data_dir = Path(r"D:\TDSI\data\train").resolve()
+train_data_dir = Path(r"../../data/train").resolve()
 # train_csv = Path(r"../../data/train/train.csv").resolve()
-test_data_dir = Path(r"D:\TDSI\data\test").resolve()
+test_data_dir = Path(r"../../data/test").resolve()
 # test_csv = Path(r"../../data/test/test.csv").resolve()
-validate_data_dir = Path(r"D:\TDSI\data\validate").resolve()
+validate_data_dir = Path(r"../../data/validate").resolve()
 # validate_csv = Path(r"../../data/validate/validate.csv").resolve()
 
 # Device configuration
