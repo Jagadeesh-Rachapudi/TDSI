@@ -24,11 +24,11 @@ latent_dim = 128
 
 # Data paths
 train_data_dir = Path(r"../../data/train/chunks").resolve()
-train_csv = Path(r"../../data/train/train.csv").resolve()
+# train_csv = Path(r"../../data/train/train.csv").resolve()
 test_data_dir = Path(r"../../data/test/chunks").resolve()
-test_csv = Path(r"../../data/test/test.csv").resolve()
+# test_csv = Path(r"../../data/test/test.csv").resolve()
 validate_data_dir = Path(r"../../data/validate/chunks").resolve()
-validate_csv = Path(r"../../data/validate/validate.csv").resolve()
+# validate_csv = Path(r"../../data/validate/validate.csv").resolve()
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -84,7 +84,7 @@ if __name__ == "__main__":
     try:
         train_loader = get_dataloader(
             data_dir=train_data_dir,
-            csv_file=train_csv,
+            # csv_file=train_csv,
             batch_size=batch_size,
             sample_rate=audio_length,
             shuffle=True,
@@ -93,7 +93,7 @@ if __name__ == "__main__":
 
         test_loader = get_dataloader(
             data_dir=test_data_dir,
-            csv_file=test_csv,
+            # csv_file=test_csv,
             batch_size=batch_size,
             sample_rate=audio_length,
             shuffle=False,
@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
         validate_loader = get_dataloader(
             data_dir=validate_data_dir,
-            csv_file=validate_csv,
+            # csv_file=validate_csv,
             batch_size=batch_size,
             sample_rate=audio_length,
             shuffle=False,
