@@ -6,3 +6,6 @@ json
 pathlib  
 matplotlib 
 datasets
+flashy
+julius
+pydub
