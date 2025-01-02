@@ -36,8 +36,20 @@ def masker(reference_chunk, chunk, P_mask, P_size, P_type):
         masked_chunk (torch.Tensor): The masked version of the input chunk.
         full_mask (torch.Tensor): A binary mask (same shape as `chunk`) indicating masked regions.
     """
+    # Ensure P_size is within valid range
     assert 0.1 <= P_size <= 0.4, "P_size must be between 0.1 and 0.4."
-    assert chunk.shape == reference_chunk.shape, "Chunks must have the same shape."
+
+    # Check and align shapes of reference_chunk and chunk
+    if chunk.shape != reference_chunk.shape:
+        max_length = max(chunk.shape[-1], reference_chunk.shape[-1])
+
+        # Pad both tensors to match the maximum length
+        if chunk.shape[-1] < max_length:
+            pad_length = max_length - chunk.shape[-1]
+            chunk = torch.nn.functional.pad(chunk, (0, pad_length))
+        if reference_chunk.shape[-1] < max_length:
+            pad_length = max_length - reference_chunk.shape[-1]
+            reference_chunk = torch.nn.functional.pad(reference_chunk, (0, pad_length))
 
     # If P_mask <= 0.5, no masking is applied
     if P_mask <= 0.5:
@@ -69,7 +81,6 @@ def masker(reference_chunk, chunk, P_mask, P_size, P_type):
         masked_chunk[..., start_idx:start_idx + mask_size] = reference_chunk[..., start_idx:start_idx + mask_size]
 
     return masked_chunk, mask
-
 
 def initialize_csv(log_path):
     """

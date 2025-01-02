@@ -8,12 +8,6 @@ import torchaudio
 
 class LazyAudioDataset(Dataset):
     def __init__(self, data_dir, sample_rate=16000, chunk_duration=0.5):
-        """
-        Args:
-            data_dir: Directory containing audio files.
-            sample_rate: Target sampling rate for audio.
-            chunk_duration: Duration of each chunk in seconds.
-        """
         self.data_dir = data_dir
         self.sample_rate = sample_rate
         self.chunk_duration = chunk_duration
@@ -26,9 +20,6 @@ class LazyAudioDataset(Dataset):
         print(f"Found {len(self.audio_files)} .wav files.")
 
     def _prepare_audio_files(self):
-        """
-        Prepares audio file paths and calculates the number of chunks per file.
-        """
         audio_files = []
         file_chunk_counts = []
 
@@ -45,19 +36,13 @@ class LazyAudioDataset(Dataset):
         return audio_files, file_chunk_counts
 
     def __len__(self):
-        """
-        Returns the total number of chunks across all audio files.
-        """
         return sum(self.file_chunk_counts)
 
     def __getitem__(self, idx):
-        """
-        Lazily loads the audio file, extracts the corresponding chunk, and retrieves its label.
-        """
         file_idx = 0
         current_chunk = idx
 
-        # Identify which file and chunk the index corresponds to
+        # Identify the file and chunk
         while current_chunk >= self.file_chunk_counts[file_idx]:
             current_chunk -= self.file_chunk_counts[file_idx]
             file_idx += 1
@@ -65,12 +50,22 @@ class LazyAudioDataset(Dataset):
         file_path = self.audio_files[file_idx]
         start_frame = current_chunk * self.chunk_size
 
-        # Load the required chunk
-        waveform, _ = torchaudio.load(file_path, frame_offset=start_frame, num_frames=self.chunk_size)
+        # Load the chunk
+        waveform, sample_rate = torchaudio.load(file_path, frame_offset=start_frame, num_frames=self.chunk_size)
 
-        label = random.randint(0, 1)  # Assign a random label for simplicity
+        # Resample if needed
+        if sample_rate != self.sample_rate:
+            resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=self.sample_rate)
+            waveform = resampler(waveform)
+
+        # Pad to ensure uniform size
+        if waveform.shape[1] < self.chunk_size:
+            print("Found a other sized chunk", waveform.shape )
+            pad_length = self.chunk_size - waveform.shape[1]
+            waveform = torch.nn.functional.pad(waveform, (0, pad_length))
+
+        label = random.randint(0, 1)
         return waveform, label
-
 
 def custom_collate_fn(batch):
     """

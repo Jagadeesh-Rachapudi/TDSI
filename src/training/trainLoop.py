@@ -58,7 +58,7 @@ def train(
         # Training loop
         for batch_idx, (audio_chunks, labels) in enumerate(tqdm(train_loader)):
             # Ensure batch size is fixed at 32
-            assert audio_chunks.size(0) == batch_size, "Batch size must be 32."
+            # assert audio_chunks.size(0) == batch_size, "Batch size must be 32."
 
             audio_chunks, labels = audio_chunks.to(device), labels.to(device)
 

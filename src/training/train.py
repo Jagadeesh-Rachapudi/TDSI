@@ -18,7 +18,7 @@ from src.utils.utility_functions import initialize_csv
 
 # Configuration
 num_epochs = 100
-batch_size = 32
+batch_size = 4
 audio_length = 4000
 learning_rate = 1e-4
 nbits = 32
