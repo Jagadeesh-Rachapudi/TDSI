@@ -3,7 +3,6 @@ from tqdm import tqdm
 from datetime import datetime
 from pathlib import Path
 import random
-import utils.utility_functions as initialize_csv, update_csv
 
 
 def train(
@@ -17,12 +16,15 @@ def train(
     compute_decoding_loss,
     compute_perceptual_loss,
     masker,
+    initialize_csv,
+    update_csv,
     batch_size=32,
     device="cuda",
     num_epochs=50,
     patience=10,
     checkpoint_path="../../checkpoints",
     log_path="../../logs/losses.csv",
+    
 ):
     # Move models to device
     generator.to(device)

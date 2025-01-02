@@ -8,12 +8,10 @@
 
 import math
 import typing as tp
-
 import numpy as np
 import torch.nn as nn
-
-from models.conv import StreamableConv1d, StreamableConvTranspose1d
-from models.lstm import StreamableLSTM
+# from src.allModels.SEANet import SEANetResnetBlock
+from src.allModels.conv import StreamableConv1d, StreamableConvTranspose1d
 
 
 class SEANetResnetBlock(nn.Module):
