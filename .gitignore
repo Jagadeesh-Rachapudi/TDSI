@@ -25,3 +25,5 @@ __pycache__
 /data/test
 /data/train
 /data/validate
+
+__pycache__
