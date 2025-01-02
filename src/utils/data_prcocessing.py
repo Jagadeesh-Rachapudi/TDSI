@@ -82,7 +82,7 @@ class LazyAudioDataset(Dataset):
             pad_length = chunk_size - waveform.shape[1]
             waveform = torch.nn.functional.pad(waveform, (0, pad_length))
 
-        print(f"Waveform shape: {waveform.shape}")
+        # print(f"Waveform shape: {waveform.shape}")
 
         label = random.randint(0, 1)  # Assign a random label for simplicity
         return waveform, label

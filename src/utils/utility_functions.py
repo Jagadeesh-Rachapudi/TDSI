@@ -87,7 +87,7 @@ def initialize_csv(log_path):
                 "Validation Accuracy (%)", "Training Perceptual Loss",
                 "Training Detection Loss", "Training Decoding Loss",
                 "Validation Perceptual Loss", "Validation Detection Loss",
-                "Validation Decoding Loss"
+                "Validation Decoding Loss", "Train Bit Accuracy (%)" ," Validation Bit Accuracy (%)"
             ])
 
 

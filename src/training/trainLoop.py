@@ -49,6 +49,9 @@ def train(
         train_loss_g, train_loss_d = 0.0, 0.0
         val_loss_g, val_loss_d = 0.0, 0.0
 
+        total_bits_correct_train = 0
+        total_bits_train = 0
+
         generator.train()
         detector.train()
 
@@ -97,6 +100,16 @@ def train(
             # Send concatenated set to the detector
             decoded_output, detection_scores = detector(concatenated_set)
 
+            # Compute the number of bits predicted correctly in training
+            predicted_bits_train = (decoded_output[:batch_size // 2] > 0.5).long()
+            correct_bits_train = (predicted_bits_train == labels[:batch_size // 2].unsqueeze(-1)).sum().item()
+            total_bits_correct_train += correct_bits_train
+            total_bits_train += batch_size // 2 * 32  # Total bits for the batch
+
+            if (batch_idx + 1) % 75 == 0:
+                batch_bit_accuracy = (correct_bits_train / (batch_size // 2 * 32)) * 100
+                print(f"Batch {batch_idx + 1}: Correct bits: {correct_bits_train}/{batch_size // 2 * 32} ({batch_bit_accuracy:.2f}%)")
+
             # Compute losses for the detector
             detection_loss = compute_detection_loss(
                 positive=detection_scores[:batch_size // 2],
@@ -124,9 +137,15 @@ def train(
             train_loss_g += perceptual_loss.item()
             train_loss_d += loss_d.item()
 
+        train_bit_accuracy = (total_bits_correct_train / total_bits_train) * 100
+        print(f"Epoch {epoch + 1}: Training bit accuracy: {train_bit_accuracy:.2f}%")
+
+
         # Validation loop
         generator.eval()
         detector.eval()
+        total_bits_correct_val = 0
+        total_bits_val = 0
         with torch.no_grad():
             for val_batch_idx, (val_chunks, val_labels) in enumerate(val_loader):
                 val_chunks, val_labels = val_chunks.to(device), val_labels.to(device)
@@ -158,6 +177,12 @@ def train(
                 concatenated_set = torch.cat((setA, setB), dim=0)
                 decoded_output, detection_scores = detector(concatenated_set)
 
+                # Compute the number of bits predicted correctly in validation
+                predicted_bits_val = (decoded_output[:batch_size // 2] > 0.5).long()
+                correct_bits_val = (predicted_bits_val == val_labels[:batch_size // 2].unsqueeze(-1)).sum().item()
+                total_bits_correct_val += correct_bits_val
+                total_bits_val += batch_size // 2 * 32  # Total bits for the batch
+
                 # Compute losses
                 detection_loss = compute_detection_loss(
                     positive=detection_scores[:batch_size // 2],
@@ -178,12 +203,15 @@ def train(
         train_accuracy = (1 - train_loss_g) * 100  # Hypothetical metric
         val_accuracy = (1 - val_loss_g) * 100  # Hypothetical metric
 
+        val_bit_accuracy = (total_bits_correct_val / total_bits_val) * 100
+        print(f"Epoch {epoch + 1}: Validation bit accuracy: {val_bit_accuracy:.2f}%")
         # Update CSV file
         update_csv(
             log_path, start_date, start_time, epoch + 1,
             train_accuracy, val_accuracy,
             train_loss_g, train_loss_d, decoding_loss.item(),
-            val_loss_g, val_loss_d, detection_loss.item()
+            val_loss_g, val_loss_d, detection_loss.item(),
+            train_bit_accuracy, val_bit_accuracy
         )
 
         # Save best model
@@ -196,6 +224,7 @@ def train(
                 "optimizer_g": optimizer_g.state_dict(),
                 "optimizer_d": optimizer_d.state_dict(),
                 "epoch": epoch + 1,
+                "Bit accuracy": train_bit_accuracy
             }, f"{checkpoint_path}/best_model.pth")
         else:
             epochs_without_improvement += 1
