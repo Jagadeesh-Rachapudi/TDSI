@@ -20,20 +20,20 @@ import torch
 
 def print_audio_shapes(data_loader, data_name):
     """
-    Print the shape of each audio chunk in the given data loader and log unexpected sizes.
+    Print the shape of each audio chunk and its label in the given data loader, and log unexpected sizes.
 
     Args:
         data_loader: DataLoader object.
         data_name: Name of the dataset (for logging purposes).
     """
     expected_shape = torch.Size([1, 8000])  # Hardcoded expected shape
-    print(f"Printing audio shapes for {data_name} dataset with expected shape {expected_shape}:")
+    print(f"Printing audio shapes and labels for {data_name} dataset with expected shape {expected_shape}:")
 
     total_audio = 0  # Counter for the total number of audio files
     unexpected_size_count = 0  # Counter for unexpected sizes
 
-    for batch_idx, (audios, file_paths) in enumerate(data_loader):
-        for audio_idx, (audio, file_path) in enumerate(zip(audios, file_paths)):
+    for batch_idx, (audios, labels) in enumerate(data_loader):
+        for audio_idx, (audio, label) in enumerate(zip(audios, labels)):
             # Check if audio is None
             if audio is None:
                 print(f"Audio {total_audio} is None. Skipping...")
@@ -42,11 +42,11 @@ def print_audio_shapes(data_loader, data_name):
                 continue
 
             audio_shape = audio.shape
-            print(f"Audio index {total_audio} shape: {audio_shape}")
+            print(f"Audio index {total_audio}: Shape = {audio_shape}, Label = {label}")
 
             # Check for unexpected shape
             if audio_shape != expected_shape:
-                print(f"Unexpected shape found for audio {total_audio} at path: {file_path}")
+                print(f"Unexpected shape found for audio {total_audio}")
                 unexpected_size_count += 1
 
             # Increment the counter
@@ -54,9 +54,6 @@ def print_audio_shapes(data_loader, data_name):
 
     print(f"Total audios checked: {total_audio}")
     print(f"Total unexpected size audios: {unexpected_size_count}")
-
-
-
 
 
 # Configuration
@@ -172,44 +169,44 @@ if __name__ == "__main__":
     print(f"Train dataset size: {len(train_loader.dataset)}")
     print(f"Validation dataset size: {len(validate_loader.dataset)}")
 
-    # Start training
+    # # Start training
     # try:
-        # train(
-        #     generator=generator,
-        #     detector=detector,
-        #     train_loader=train_loader,
-        #     val_loader=validate_loader,
-        #     optimizer_g=optimizer_g,
-        #     optimizer_d=optimizer_d,
-        #     device=device,
-        #     num_epochs=num_epochs,
-        #     compute_detection_loss=compute_detection_loss,
-        #     compute_decoding_loss=compute_decoding_loss,
-        #     compute_perceptual_loss=compute_perceptual_loss,
-        #     checkpoint_path="./checkpoints",
-        #     log_path="./logs/losses.csv",
-        #     masker=masker,
-        #     update_csv=update_csv,
-        #     initialize_csv=initialize_csv
-        # )
-        # trainTest(
-        #     generator=generator,
-        #     detector=detector,
-        #     train_loader=train_loader,
-        #     val_loader=validate_loader,
-        #     optimizer_g=optimizer_g,
-        #     optimizer_d=optimizer_d,
-        #     device=device,
-        #     num_epochs=num_epochs,
-        #     compute_detection_loss=compute_detection_loss,
-        #     compute_decoding_loss=compute_decoding_loss,
-        #     compute_perceptual_loss=compute_perceptual_loss,
-        #     checkpoint_path="./checkpoints",
-        #     log_path="./logs/losses.csv",
-        #     masker=masker,
-        #     update_csv=update_csv,
-        #     initialize_csv=initialize_csv
-        # )
+    #     # train(
+    #     #     generator=generator,
+    #     #     detector=detector,
+    #     #     train_loader=train_loader,
+    #     #     val_loader=validate_loader,
+    #     #     optimizer_g=optimizer_g,
+    #     #     optimizer_d=optimizer_d,
+    #     #     device=device,
+    #     #     num_epochs=num_epochs,
+    #     #     compute_detection_loss=compute_detection_loss,
+    #     #     compute_decoding_loss=compute_decoding_loss,
+    #     #     compute_perceptual_loss=compute_perceptual_loss,
+    #     #     checkpoint_path="./checkpoints",
+    #     #     log_path="./logs/losses.csv",
+    #     #     masker=masker,
+    #     #     update_csv=update_csv,
+    #     #     initialize_csv=initialize_csv
+    #     # )
+    #     trainTest(
+    #         generator=generator,
+    #         detector=detector,
+    #         train_loader=train_loader,
+    #         val_loader=validate_loader,
+    #         optimizer_g=optimizer_g,
+    #         optimizer_d=optimizer_d,
+    #         device=device,
+    #         num_epochs=num_epochs,
+    #         compute_detection_loss=compute_detection_loss,
+    #         compute_decoding_loss=compute_decoding_loss,
+    #         compute_perceptual_loss=compute_perceptual_loss,
+    #         checkpoint_path="./checkpoints",
+    #         log_path="./logs/losses.csv",
+    #         masker=masker,
+    #         update_csv=update_csv,
+    #         initialize_csv=initialize_csv
+    #     )
     # except Exception as e:
-        # print(f"An error occurred during training: {e}")
-        # exit(1)
+    #     print(f"An error occurred during training: {e}")
+    #     exit(1)
