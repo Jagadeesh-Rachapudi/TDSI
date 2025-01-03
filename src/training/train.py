@@ -196,7 +196,7 @@ if __name__ == "__main__":
             optimizer_g=optimizer_g,
             optimizer_d=optimizer_d,
             device=device,
-            num_epochs=num_epochs,            
+            num_epochs=num_epochs,
         )
     except Exception as e:
         print(f"An error occurred during training: {e}")
