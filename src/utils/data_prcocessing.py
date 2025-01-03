@@ -46,7 +46,9 @@ class AudioDataset(Dataset):
             waveform, sample_rate = torchaudio.load(audio_path)
 
             # Generate a random 32-bit label
-            label = random.randint(0, 2**32 - 1)
+            label = random.randint(0, 2**31 - 1)
+            # label = random.randint(0, 2**32 - 1)  # Generates values in range [0, 2^32 - 1]
+
 
             return waveform, label
 

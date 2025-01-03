@@ -59,7 +59,7 @@ def print_audio_shapes(data_loader, data_name):
 # Configuration
 num_epochs = 100
 batch_size = 1
-audio_length = 4000
+audio_length = 8000
 learning_rate = 1e-4
 nbits = 32
 latent_dim = 128
