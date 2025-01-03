@@ -58,7 +58,7 @@ def print_audio_shapes(data_loader, data_name):
 
 # Configuration
 num_epochs = 100
-batch_size = 4
+batch_size = 1
 audio_length = 4000
 learning_rate = 1e-4
 nbits = 32
@@ -130,7 +130,7 @@ if __name__ == "__main__":
             batch_size=batch_size,
             sample_rate=audio_length,
             shuffle=True,
-            num_workers=4,
+            num_workers=0,
         )
 
         test_loader = get_dataloader(
@@ -139,7 +139,7 @@ if __name__ == "__main__":
             batch_size=batch_size,
             sample_rate=audio_length,
             shuffle=False,
-            num_workers=4,
+            num_workers=0,
         )
 
         validate_loader = get_dataloader(
@@ -148,10 +148,10 @@ if __name__ == "__main__":
             batch_size=batch_size,
             sample_rate=audio_length,
             shuffle=False,
-            num_workers=4,
+            num_workers=0,
         )
 
-        print_audio_shapes(test_loader, data_name="Test")  
+        # print_audio_shapes(test_loader, data_name="Test")  
 
     except FileNotFoundError as e:
         print(f"Error initializing DataLoaders: {e}")
@@ -170,7 +170,7 @@ if __name__ == "__main__":
     print(f"Validation dataset size: {len(validate_loader.dataset)}")
 
     # # Start training
-    # try:
+    try:
     #     # train(
     #     #     generator=generator,
     #     #     detector=detector,
@@ -189,24 +189,15 @@ if __name__ == "__main__":
     #     #     update_csv=update_csv,
     #     #     initialize_csv=initialize_csv
     #     # )
-    #     trainTest(
-    #         generator=generator,
-    #         detector=detector,
-    #         train_loader=train_loader,
-    #         val_loader=validate_loader,
-    #         optimizer_g=optimizer_g,
-    #         optimizer_d=optimizer_d,
-    #         device=device,
-    #         num_epochs=num_epochs,
-    #         compute_detection_loss=compute_detection_loss,
-    #         compute_decoding_loss=compute_decoding_loss,
-    #         compute_perceptual_loss=compute_perceptual_loss,
-    #         checkpoint_path="./checkpoints",
-    #         log_path="./logs/losses.csv",
-    #         masker=masker,
-    #         update_csv=update_csv,
-    #         initialize_csv=initialize_csv
-    #     )
-    # except Exception as e:
-    #     print(f"An error occurred during training: {e}")
-    #     exit(1)
+        trainTest(
+            generator=generator,
+            detector=detector,
+            train_loader=train_loader,
+            optimizer_g=optimizer_g,
+            optimizer_d=optimizer_d,
+            device=device,
+            num_epochs=num_epochs,            
+        )
+    except Exception as e:
+        print(f"An error occurred during training: {e}")
+        exit(1)
