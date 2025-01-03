@@ -5,17 +5,52 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchaudio
 
+def print_audio_shapes(data_loader, data_name):
+    """
+    Print the shape of each audio chunk in the given data loader and log unexpected sizes.
+
+    Args:
+        data_loader: DataLoader object.
+        data_name: Name of the dataset (for logging purposes).
+    """
+    expected_shape = torch.Size([1, 8000])  # Hardcoded expected shape
+    print(f"Printing audio shapes for {data_name} dataset with expected shape {expected_shape}:")
+
+    total_audio = 0  # Counter for the total number of audio files
+    unexpected_size_count = 0  # Counter for unexpected sizes
+
+    for batch_idx, (audios, file_paths) in enumerate(data_loader):
+        for audio_idx, (audio, file_path) in enumerate(zip(audios, file_paths)):
+            # Check if audio is None
+            if audio is None:
+                print(f"Audio {total_audio} is None. Skipping...")
+                unexpected_size_count += 1
+                total_audio += 1
+                continue
+
+            audio_shape = audio.shape
+            print(f"Audio index {total_audio} shape: {audio_shape}")
+
+            # Check for unexpected shape
+            if audio_shape != expected_shape:
+                print(f"Unexpected shape found for audio {total_audio} at path: {file_path}")
+                unexpected_size_count += 1
+
+            # Increment the counter
+            total_audio += 1
+
+    print(f"Total audios checked: {total_audio}")
+    print(f"Total unexpected size audios: {unexpected_size_count}")
+
 
 class LazyAudioDataset(Dataset):
     """
-    Dataset for lazy loading and processing audio chunks from .wav files.
+    Dataset for lazy loading and processing audio files without chunking.
     """
 
-    def __init__(self, data_dir, sample_rate=16000, chunk_duration=0.5):
+    def __init__(self, data_dir, sample_rate=16000):
         self.data_dir = data_dir
         self.sample_rate = sample_rate
-        self.chunk_duration = chunk_duration
-        self.chunk_size = int(chunk_duration * sample_rate)
         self.audio_files = self._get_audio_files()
 
         if not self.audio_files:
@@ -25,69 +60,70 @@ class LazyAudioDataset(Dataset):
 
     def _get_audio_files(self):
         """
-        Collect all .wav files in the given directory and subdirectories.
+        Collect all .wav files in the given directory and subdirectories and print their shapes.
         """
         audio_files = []
         for root, _, files in os.walk(self.data_dir):
             for file in files:
                 if file.endswith(".wav"):
-                    audio_files.append(os.path.join(root, file))
+                    file_path = os.path.join(root, file)
+                    try:
+                        # Load the audio file to get its shape
+                        waveform, sample_rate = torchaudio.load(file_path)
+                        print(f"Audio path: {file_path}, Shape: {waveform.shape}, Sample rate: {sample_rate}")
+                        audio_files.append(file_path)
+                    except Exception as e:
+                        print(f"Error loading {file_path}: {e}")
         return audio_files
 
     def __len__(self):
         """
-        Total number of chunks across all files.
+        Total number of audio files.
         """
-        total_chunks = 0
-        for file_path in self.audio_files:
-            try:
-                metadata = torchaudio.info(file_path)
-                num_chunks = metadata.num_frames // self.chunk_size
-                total_chunks += num_chunks
-                print("total chunks loaded is",total_chunks)
-            except Exception as e:
-                print(f"Error reading {file_path}: {e}")
-
-        return total_chunks
+        return len(self.audio_files)
 
     def __getitem__(self, idx):
         """
         Return the entire audio file at the given index.
         """
         file_path = self.audio_files[idx]
-        print("this is the index",idx)
-
         try:
             # Load the entire audio file
-            # Load the audio file
             waveform, sample_rate = torchaudio.load(file_path)
 
-            # Print the shape of the loaded audio
-            print("The just now loaded audio is", waveform.shape)
+            # Ensure waveform matches the expected sample rate
+            if sample_rate != self.sample_rate:
+                resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=self.sample_rate)
+                waveform = resampler(waveform)
 
-            # Assign a label (if required, replace this with actual logic)
-            label = random.randint(0, 1)  # Placeholder for label logic
-
-            return waveform, label
+            print(f"Audio loaded: Path: {file_path}, Shape: {waveform.shape}")
+            return waveform, file_path
 
         except Exception as e:
-            print("This is the index value creating the proble",idx)
-            print(f"Error loading file {file_path}: {e}")
+            print(f"Error reading {file_path}: {e}")
             return None
 
 
 def custom_collate_fn(batch):
     """
-    Collate function to handle batches with variable-length or missing chunks.
+    Custom collate function to handle batches of (audio, file_path).
     """
-    batch = [item for item in batch if item is not None]  # Filter out None
-    if len(batch) == 0:
+    audios = []
+    file_paths = []
+
+    for item in batch:
+        if item is not None:  # Skip None items
+            audio, file_path = item
+            audios.append(audio)
+            file_paths.append(file_path)
+
+    # Stack audio tensors if all have the same shape
+    if len(audios) > 0:
+        stacked_audios = torch.stack(audios)
+    else:
         raise ValueError("All elements in the batch are None.")
 
-    waveforms, labels = zip(*batch)
-    waveforms = torch.stack(waveforms)  # Stack into batch tensor
-    labels = torch.tensor(labels, dtype=torch.long)
-    return waveforms, labels
+    return stacked_audios, file_paths
 
 
 def get_dataloader(data_dir, batch_size, sample_rate=16000, shuffle=True, num_workers=4):
@@ -113,7 +149,6 @@ def get_dataloader(data_dir, batch_size, sample_rate=16000, shuffle=True, num_wo
         collate_fn=custom_collate_fn,
         pin_memory=True,
     )
-
 
 # Export the module for external use
 __all__ = ["LazyAudioDataset", "get_dataloader"]
