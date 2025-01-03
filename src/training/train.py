@@ -33,7 +33,7 @@ def print_audio_shapes(data_loader, data_name):
     unexpected_size_count = 0  # Counter for unexpected sizes
 
     for batch_idx, batch in enumerate(data_loader):
-        for audio_idx, (audio, file_path) in enumerate(batch):  # Assuming dataset returns file_path as well
+        for audio_idx, audio in enumerate(batch):  # Assuming dataset returns only audio tensors
             # Check if audio is None
             if audio is None:
                 print(f"Audio {total_audio} is None. Skipping...")
@@ -46,7 +46,7 @@ def print_audio_shapes(data_loader, data_name):
 
             # Check for unexpected shape
             if audio_shape != expected_shape:
-                print(f"Unexpected shape found for audio {total_audio} at path: {file_path}")
+                print(f"Unexpected shape found for audio {total_audio}.")
                 unexpected_size_count += 1
 
             # Increment the counter
@@ -54,6 +54,7 @@ def print_audio_shapes(data_loader, data_name):
 
     print(f"Total audios checked: {total_audio}")
     print(f"Total unexpected size audios: {unexpected_size_count}")
+
 
 
 # Configuration
@@ -65,11 +66,11 @@ nbits = 32
 latent_dim = 128
 
 # Data paths
-train_data_dir = Path(r"/content/TDSI/data/train2/test").resolve()
+train_data_dir = Path(r"/content/TDSI/data/test").resolve()
 # train_csv = Path(r"../../data/train/train.csv").resolve()
-test_data_dir = Path(r"/content/TDSI/data/train2/test").resolve()
+test_data_dir = Path(r"/content/TDSI/data/test").resolve()
 # test_csv = Path(r"../../data/test/test.csv").resolve()
-validate_data_dir = Path(r"/content/TDSI/data/train2/test").resolve()
+validate_data_dir = Path(r"/content/TDSI/data/test").resolve()
 # validate_csv = Path(r"../../data/validate/validate.csv").resolve()
 
 # Device configuration
