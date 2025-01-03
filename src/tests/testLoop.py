@@ -5,7 +5,7 @@ from pathlib import Path
 import random
 
 
-def train(
+def trainTest(
     generator,
     detector,
     train_loader,
