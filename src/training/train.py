@@ -16,6 +16,45 @@ from src.utils.utility_functions import masker,update_csv
 from src.utils.utility_functions import initialize_csv
 from src.tests.testLoop import trainTest
 
+import torch
+
+def print_audio_shapes(data_loader, data_name):
+    """
+    Print the shape of each audio chunk in the given data loader and log unexpected sizes.
+
+    Args:
+        data_loader: DataLoader object.
+        data_name: Name of the dataset (for logging purposes).
+    """
+    expected_shape = torch.Size([1, 8000])  # Hardcoded expected shape
+    print(f"Printing audio shapes for {data_name} dataset with expected shape {expected_shape}:")
+
+    total_audio = 0  # Counter for the total number of audio files
+    unexpected_size_count = 0  # Counter for unexpected sizes
+
+    for batch_idx, batch in enumerate(data_loader):
+        for audio_idx, (audio, file_path) in enumerate(batch):  # Assuming dataset returns file_path as well
+            # Check if audio is None
+            if audio is None:
+                print(f"Audio {total_audio} is None. Skipping...")
+                unexpected_size_count += 1
+                total_audio += 1
+                continue
+
+            audio_shape = audio.shape
+            print(f"Audio index {total_audio} shape: {audio_shape}")
+
+            # Check for unexpected shape
+            if audio_shape != expected_shape:
+                print(f"Unexpected shape found for audio {total_audio} at path: {file_path}")
+                unexpected_size_count += 1
+
+            # Increment the counter
+            total_audio += 1
+
+    print(f"Total audios checked: {total_audio}")
+    print(f"Total unexpected size audios: {unexpected_size_count}")
+
 
 # Configuration
 num_epochs = 100
@@ -26,11 +65,11 @@ nbits = 32
 latent_dim = 128
 
 # Data paths
-train_data_dir = Path(r"../../data/train").resolve()
+train_data_dir = Path(r"/content/TDSI/data/train2/test").resolve()
 # train_csv = Path(r"../../data/train/train.csv").resolve()
-test_data_dir = Path(r"../../data/test").resolve()
+test_data_dir = Path(r"/content/TDSI/data/train2/test").resolve()
 # test_csv = Path(r"../../data/test/test.csv").resolve()
-validate_data_dir = Path(r"../../data/validate").resolve()
+validate_data_dir = Path(r"/content/TDSI/data/train2/test").resolve()
 # validate_csv = Path(r"../../data/validate/validate.csv").resolve()
 
 # Device configuration
@@ -112,6 +151,8 @@ if __name__ == "__main__":
             num_workers=4,
         )
 
+        print_audio_shapes(test_loader, data_name="Test")  
+
     except FileNotFoundError as e:
         print(f"Error initializing DataLoaders: {e}")
         exit(1)
@@ -129,7 +170,7 @@ if __name__ == "__main__":
     print(f"Validation dataset size: {len(validate_loader.dataset)}")
 
     # Start training
-    try:
+    # try:
         # train(
         #     generator=generator,
         #     detector=detector,
@@ -148,24 +189,24 @@ if __name__ == "__main__":
         #     update_csv=update_csv,
         #     initialize_csv=initialize_csv
         # )
-        trainTest(
-            generator=generator,
-            detector=detector,
-            train_loader=train_loader,
-            val_loader=validate_loader,
-            optimizer_g=optimizer_g,
-            optimizer_d=optimizer_d,
-            device=device,
-            num_epochs=num_epochs,
-            compute_detection_loss=compute_detection_loss,
-            compute_decoding_loss=compute_decoding_loss,
-            compute_perceptual_loss=compute_perceptual_loss,
-            checkpoint_path="./checkpoints",
-            log_path="./logs/losses.csv",
-            masker=masker,
-            update_csv=update_csv,
-            initialize_csv=initialize_csv
-        )
-    except Exception as e:
-        print(f"An error occurred during training: {e}")
-        exit(1)
+        # trainTest(
+        #     generator=generator,
+        #     detector=detector,
+        #     train_loader=train_loader,
+        #     val_loader=validate_loader,
+        #     optimizer_g=optimizer_g,
+        #     optimizer_d=optimizer_d,
+        #     device=device,
+        #     num_epochs=num_epochs,
+        #     compute_detection_loss=compute_detection_loss,
+        #     compute_decoding_loss=compute_decoding_loss,
+        #     compute_perceptual_loss=compute_perceptual_loss,
+        #     checkpoint_path="./checkpoints",
+        #     log_path="./logs/losses.csv",
+        #     masker=masker,
+        #     update_csv=update_csv,
+        #     initialize_csv=initialize_csv
+        # )
+    # except Exception as e:
+        # print(f"An error occurred during training: {e}")
+        # exit(1)

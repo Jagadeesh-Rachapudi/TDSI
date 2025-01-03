@@ -67,6 +67,9 @@ def trainTest(
                 # Split the batch into SetA and SetB
                 setA = audio_chunks.clone()
                 setB = audio_chunks.clone()
+                if len(setB) == 0:
+                  print(f"Empty SetB in batch {batch_idx}. Input data: {input_data_info}")
+
 
                 # Debugging: SetA and SetB shapes
                 print(f"SetA shape: {setA.shape}, SetB shape: {setB.shape}")
@@ -92,38 +95,35 @@ def trainTest(
                 perceptual_loss.backward()
                 optimizer_g.step()
 
-                # Process first half of SetB (bypass watermarking)
-                setB = setB[batch_size // 2:]  # Retain only the second half
+                # Debug SetB before slicing
+                setB = setB[batch_size // 2:]
+                if setB.size(0) == 0:
+                    print(f"SetB is empty in batch {batch_idx}. Skipping.")
+                    continue
 
-                # Debugging: Masking process
-                print(f"SetB shape after slicing: {setB.shape}")
-
-                # Mask first half of SetA
-                last_chunk_setB = setB[-1:]  # Reference chunk from SetB
+                # Debug Masker
                 masked_chunks = []
                 for i in range(setA.size(0)):
                     P_mask = random.uniform(0, 1)
                     P_size = random.uniform(0.1, 0.4)
                     P_type = random.uniform(0, 1)
-                    masked_chunk, _ = masker(last_chunk_setB, setA[i], P_mask, P_size, P_type)
+                    masked_chunk, _ = masker(setB[-1:], setA[i], P_mask, P_size, P_type)
 
-                    # Debugging: Masked chunk
+                    # Debugging
                     print(f"Masked chunk {i} shape: {masked_chunk.shape}")
                     masked_chunks.append(masked_chunk)
 
+                # Ensure masked chunks are valid
                 setA = torch.stack(masked_chunks)
 
-                # Concatenate masked SetA with SetB
+                # Debug Concatenation
+                print(f"SetA shape: {setA.shape}, SetB shape: {setB.shape}")
                 concatenated_set = torch.cat((setA, setB), dim=0)
 
-                # Debugging: Concatenated set
-                print(f"Concatenated set shape: {concatenated_set.shape}")
-
-                # Send concatenated set to the detector
+                # Debug Detector Output
                 decoded_output, detection_scores = detector(concatenated_set)
-
-                # Debugging: Detector output
                 print(f"Decoded output shape: {decoded_output.shape}, Detection scores shape: {detection_scores.shape}")
+
 
                 # Compute the number of bits predicted correctly in training
                 predicted_bits_train = (decoded_output[:batch_size // 2] > 0.5).long()
