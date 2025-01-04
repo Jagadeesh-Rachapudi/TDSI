@@ -66,7 +66,7 @@ def train(
         total_bits_train = 0
         total_bits_correct_train = 0
 
-        for batch_idx, batch in enumerate(tqdm(train_loader, desc="Training", miniters=100)):
+        for batch_idx, batch in enumerate(tqdm(train_loader, desc="Training" ,leave=True, miniters=100)):
             audio_tensors, labels = batch
             audio = torch.cat(audio_tensors, dim=0).to(device)
             labels = torch.tensor(labels, dtype=torch.int32).to(device)
