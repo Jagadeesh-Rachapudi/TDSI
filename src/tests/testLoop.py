@@ -66,7 +66,7 @@ def train(
         total_bits_train = 0
         total_bits_correct_train = 0
 
-        for batch_idx, batch in enumerate(tqdm(train_loader, desc="Training")):
+        for batch_idx, batch in enumerate(tqdm(train_loader, desc="Training", miniters=100)):
             audio_tensors, labels = batch
             audio = torch.cat(audio_tensors, dim=0).to(device)
             labels = torch.tensor(labels, dtype=torch.int32).to(device)
@@ -117,7 +117,7 @@ def train(
             total_bits_correct_train += correct_bits_train
 
             # Print batch accuracy every 75 batches
-            if (batch_idx + 1) % 75 == 0:
+            if (batch_idx + 1) % 50 == 0:
                 batch_bit_accuracy = (correct_bits_train / labels_binary.numel()) * 100
                 print(
                     f"Batch {batch_idx + 1}: Correct bits: {correct_bits_train}/{labels_binary.numel()} "
