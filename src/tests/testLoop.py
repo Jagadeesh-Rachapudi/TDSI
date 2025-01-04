@@ -71,7 +71,8 @@ def train(
                     scaled_logits, labels_binary.float()
                 )
 
-                total_loss = 1.0 * gen_audio_loss + 1.0 * label_loss
+                noise_penalty = torch.mean(torch.abs(watermarked_audio - audio))
+                total_loss = 0.8 * gen_audio_loss + 0.2 * label_loss + 0.1 * noise_penalty
 
                 optimizer_g.zero_grad()
                 optimizer_d.zero_grad()
@@ -102,18 +103,23 @@ def train(
                         f"Label Loss: {label_loss.item():.4f}, Batch Accuracy: {batch_accuracy:.2f}%"
                     )
 
-            # Compute average losses for the epoch
-            avg_train_loss = train_loss / num_train_batches
-            avg_train_gen_loss = train_gen_loss / num_train_batches
-            avg_train_label_loss = train_label_loss / num_train_batches
+            num_batches = len(train_loader)  # Total number of batches in the training epoch
+            # Compute average losses
+            avg_train_loss = train_loss / num_batches
+            avg_train_gen_loss = train_gen_loss / num_batches
+            avg_train_label_loss = train_label_loss / num_batches
+
             train_bit_accuracy = (total_bits_correct_train / total_bits_train) * 100
             epoch_duration = time.time() - epoch_start_time
 
+            # Print the averaged metrics in the summary
             print(
                 f"\nEpoch {epoch + 1} Summary: "
-                f"Train Loss: {avg_train_loss:.4f}, Gen Loss: {avg_train_gen_loss:.4f}, Label Loss: {avg_train_label_loss:.4f}, "
-                f"Train Accuracy: {train_bit_accuracy:.2f}%, Duration: {epoch_duration:.2f}s"
+                f"Train Loss: {avg_train_loss:.4f}, Gen Loss: {avg_train_gen_loss:.4f}, "
+                f"Label Loss: {avg_train_label_loss:.4f}, Train Accuracy: {train_bit_accuracy:.2f}%, "
+                f"Duration: {epoch_duration:.2f}s"
             )
+
 
             # Save checkpoint
             checkpoint_file = f"{checkpoint_path}/epoch_{epoch + 1}.pth"
@@ -169,9 +175,9 @@ def train(
                     val_total_bits += val_labels_binary.numel()
 
                 # Compute average validation losses and accuracy
-                avg_val_loss_g = val_loss_g / num_val_batches
-                avg_val_loss_d = val_loss_d / num_val_batches
-                val_bit_accuracy = (val_correct_bits / val_total_bits) * 100
+                avg_val_loss_g = val_loss_g / num_val_batches if num_val_batches > 0 else 0.0
+                avg_val_loss_d = val_loss_d / num_val_batches if num_val_batches > 0 else 0.0
+                val_bit_accuracy = (val_correct_bits / val_total_bits) * 100 if val_total_bits > 0 else 0.0
 
                 print(
                     f"Validation Loss - Generator: {avg_val_loss_g:.4f}, Detector: {avg_val_loss_d:.4f}, "
