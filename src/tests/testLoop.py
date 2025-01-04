@@ -1,8 +1,7 @@
 import torch
-from tqdm import tqdm
 from pathlib import Path
+import csv
 from datetime import datetime
-
 
 def train(
     generator,
@@ -43,8 +42,7 @@ def train(
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
 
     # Initialize CSV logging
-    if initialize_csv:
-        initialize_csv(log_path)
+    initialize_csv(log_path)
 
     # Record start date and time
     start_date = datetime.now().strftime("%Y-%m-%d")
@@ -66,7 +64,7 @@ def train(
         total_bits_train = 0
         total_bits_correct_train = 0
 
-        for batch_idx, batch in enumerate(tqdm(train_loader, desc="Training", leave=True, mininterval=1)):
+        for batch_idx, batch in enumerate(train_loader):
             audio_tensors, labels = batch
             audio = torch.cat(audio_tensors, dim=0).to(device)
             labels = torch.tensor(labels, dtype=torch.int32).to(device)
@@ -112,21 +110,18 @@ def train(
 
             # Update training metrics
             train_loss += total_loss.item()
-            correct_bits_train = (decoded_message_logits.argmax(dim=-1) == labels_binary).sum().item()
+            correct_bits_train = (decoded_message_logits.argmax(dim=1) == labels_binary).sum().item()
             total_bits_train += labels_binary.numel()
             total_bits_correct_train += correct_bits_train
 
-            # Print batch accuracy every 100 batches
+            # Print batch progress and accuracy every 100 batches
             if (batch_idx + 1) % 100 == 0:
-                batch_bit_accuracy = (correct_bits_train / labels_binary.numel()) * 100
-                print(
-                    f"Batch {batch_idx + 1}: Correct bits: {correct_bits_train}/{labels_binary.numel()} "
-                    f"({batch_bit_accuracy:.2f}%)"
-                )
+                batch_bit_accuracy = (total_bits_correct_train / total_bits_train) * 100
+                print(f"Batch {batch_idx + 1}/{len(train_loader)}: Loss={total_loss:.4f}, Bit Accuracy={batch_bit_accuracy:.2f}%")
 
         # Calculate epoch training accuracy
         train_bit_accuracy = (total_bits_correct_train / total_bits_train) * 100
-        print(f"Epoch {epoch + 1}: Training bit accuracy: {train_bit_accuracy:.2f}%")
+        print(f"Epoch {epoch + 1}: Training Loss={train_loss:.4f}, Training Bit Accuracy={train_bit_accuracy:.2f}%")
 
         # Validation loop
         generator.eval()
@@ -138,7 +133,7 @@ def train(
         total_correct_val_bits = 0
 
         with torch.no_grad():
-            for batch in tqdm(val_loader, desc="Validation"):
+            for batch_idx, batch in enumerate(val_loader):
                 audio_tensors, labels = batch
                 audio = torch.cat(audio_tensors, dim=0).to(device)
                 labels = torch.tensor(labels, dtype=torch.int32).to(device)
@@ -173,7 +168,7 @@ def train(
                 ).item()
 
                 # Track bit-level accuracy
-                correct_bits = (decoded_message_logits.argmax(dim=-1) == labels_binary).sum().item()
+                correct_bits = (decoded_message_logits.argmax(dim=1) == labels_binary).sum().item()
                 total_val_bits += labels_binary.numel()
                 total_correct_val_bits += correct_bits
 
@@ -204,15 +199,15 @@ def train(
                 break
 
         # Update CSV
-        if update_csv:
-            update_csv(
-                log_path,
-                start_date,
-                start_time,
-                epoch + 1,
-                train_bit_accuracy,
-                val_bit_accuracy,
-                train_loss / len(train_loader),
-                val_loss_g / len(val_loader),
-                val_loss_d / len(val_loader),
-            )
+        update_csv(
+            log_path,
+            start_date,
+            start_time,
+            epoch + 1,
+            train_bit_accuracy,
+            val_bit_accuracy,
+            val_loss_total,
+            val_loss_g,
+            val_loss_d,
+            val_loss_total,  # Placeholder for val decoding loss
+        )
