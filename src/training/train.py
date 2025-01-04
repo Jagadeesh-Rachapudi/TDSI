@@ -14,7 +14,7 @@ from src.utils.data_prcocessing import get_dataloader
 from src.losses.loss import compute_detection_loss, compute_decoding_loss, compute_perceptual_loss
 from src.utils.utility_functions import masker,update_csv
 from src.utils.utility_functions import initialize_csv
-from src.tests.testLoop import trainTest
+from src.tests.testLoop import train
 
 import torch
 
@@ -171,33 +171,33 @@ if __name__ == "__main__":
 
     # # Start training
     try:
-        # train(
-        #     generator=generator,
-        #     detector=detector,
-        #     train_loader=train_loader,
-        #     val_loader=validate_loader,
-        #     optimizer_g=optimizer_g,
-        #     optimizer_d=optimizer_d,
-        #     device=device,
-        #     num_epochs=num_epochs,
-        #     compute_detection_loss=compute_detection_loss,
-        #     compute_decoding_loss=compute_decoding_loss,
-        #     compute_perceptual_loss=compute_perceptual_loss,
-        #     checkpoint_path="./checkpoints",
-        #     log_path="./logs/losses.csv",
-        #     masker=masker,
-        #     update_csv=update_csv,
-        #     initialize_csv=initialize_csv
-        # )
-        trainTest(
+        train(
             generator=generator,
             detector=detector,
             train_loader=train_loader,
+            val_loader=validate_loader,
             optimizer_g=optimizer_g,
             optimizer_d=optimizer_d,
             device=device,
             num_epochs=num_epochs,
+            compute_detection_loss=compute_detection_loss,
+            compute_decoding_loss=compute_decoding_loss,
+            compute_perceptual_loss=compute_perceptual_loss,
+            checkpoint_path="./checkpoints",
+            log_path="./logs/losses.csv",
+            masker=masker,
+            update_csv=update_csv,
+            initialize_csv=initialize_csv
         )
+        # trainTest(
+        #     generator=generator,
+        #     detector=detector,
+        #     train_loader=train_loader,
+        #     optimizer_g=optimizer_g,
+        #     optimizer_d=optimizer_d,
+        #     device=device,
+        #     num_epochs=num_epochs,
+        # )
     except Exception as e:
         print(f"An error occurred during training: {e}")
         exit(1)
