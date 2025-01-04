@@ -7,7 +7,7 @@ from src.allModels.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 
 # Configuration
 audio_length = 8000  # 0.5 seconds
-batch_size = 20       # Batch size
+batch_size = 1       # Batch size
 nbits = 32           # Number of bits in the watermark message
 latent_dim = 128     # Latent space dimensionality
 

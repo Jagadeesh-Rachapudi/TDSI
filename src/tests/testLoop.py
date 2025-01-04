@@ -115,7 +115,7 @@ def train(
             total_bits_correct_train += correct_bits_train
 
             # Print batch progress and accuracy every 100 batches
-            if (batch_idx + 1) % 50 == 0:
+            if (batch_idx + 1) % 5 == 0:
                 batch_bit_accuracy = (total_bits_correct_train / total_bits_train) * 100
                 print(f"Batch {batch_idx + 1}/{len(train_loader)}: Loss={total_loss:.4f}, Bit Accuracy={batch_bit_accuracy:.2f}%")
 
@@ -163,8 +163,9 @@ def train(
                     val_loss_g += torch.nn.functional.mse_loss(audio, watermarked_audio).item()
 
                 # Compute label loss
+                scaled_logits = decoded_message_logits / 1.0  # e.g., temperature=1.0
                 val_loss_d += torch.nn.functional.binary_cross_entropy_with_logits(
-                    decoded_message_logits, labels_binary.float()
+                    scaled_logits, labels_binary.float()
                 ).item()
 
                 # Track bit-level accuracy
@@ -174,6 +175,7 @@ def train(
 
         # Combine validation losses
         val_loss_total = val_loss_g + val_loss_d
+        
         val_bit_accuracy = (total_correct_val_bits / total_val_bits) * 100
 
         print(f"Epoch {epoch + 1}: Validation Loss: {val_loss_total:.4f}, Validation Bit Accuracy: {val_bit_accuracy:.2f}%")
