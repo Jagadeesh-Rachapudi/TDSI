@@ -8,51 +8,18 @@ from src.allModels.models import AudioSealDetector, AudioSealWM, MsgProcessor
 from src.allModels.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from src.utils.data_prcocessing import get_dataloader
 from src.losses.loss import compute_perceptual_loss
-from src.utils.utility_functions import masker, update_csv, initialize_csv
+from src.utils.utility_functions import update_csv, initialize_csv
 from src.tests.testLoop import train
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from datetime import datetime
-
-
-def print_audio_shapes(data_loader, data_name):
-    """
-    Print the shape of each audio chunk and its label in the given data loader, and log unexpected sizes.
-    """
-    expected_shape = torch.Size([1, 8000])  # Hardcoded expected shape
-    print(f"Checking {data_name} dataset audio shapes with expected shape {expected_shape}:")
-
-    total_audio = 0  # Counter for the total number of audio files
-    unexpected_size_count = 0  # Counter for unexpected sizes
-
-    for batch_idx, (audios, labels) in enumerate(data_loader):
-        for audio_idx, (audio, label) in enumerate(zip(audios, labels)):
-            if audio is None:
-                print(f"Audio {total_audio} is None. Skipping...")
-                unexpected_size_count += 1
-                total_audio += 1
-                continue
-
-            audio_shape = audio.shape
-            print(f"Audio {total_audio}: Shape = {audio_shape}, Label = {label}")
-
-            if audio_shape != expected_shape:
-                print(f"Unexpected shape found for audio {total_audio}")
-                unexpected_size_count += 1
-
-            total_audio += 1
-
-    print(f"Total audios checked: {total_audio}")
-    print(f"Total unexpected size audios: {unexpected_size_count}")
-
 
 # Configuration
 num_epochs = 100
 batch_size = 1
 audio_length = 8000
-learning_rate = 1e-5
+learning_rate = 5e-3  # Updated learning rate
 nbits = 32
 latent_dim = 128
-
-
 
 # Data paths
 train_data_dir = Path("/content/TDSI/data/test").resolve()
@@ -84,17 +51,16 @@ if __name__ == "__main__":
 
     msg_processor = MsgProcessor(
         nbits=32,  # Number of bits for the watermark message
-        hidden_size=latent_dim,  # Must match the encoder's latent dimension
+        hidden_size=latent_dim,
     ).to(device)
 
-    # Initialize generator (AudioSealWM)
+    # Initialize generator and detector
     generator = AudioSealWM(
         encoder=encoder,
         decoder=decoder,
         msg_processor=msg_processor,
     ).to(device)
 
-    # Initialize detector (AudioSealDetector)
     detector = AudioSealDetector(
         channels=1,
         dimension=latent_dim,
@@ -105,11 +71,12 @@ if __name__ == "__main__":
         nbits=nbits,
     ).to(device)
 
-    # Initialize optimizers
+    # Optimizers and scheduler
     optimizer_g = Adam(generator.parameters(), lr=learning_rate, weight_decay=1e-4)
     optimizer_d = Adam(detector.parameters(), lr=learning_rate, weight_decay=1e-4)
+    scheduler = ReduceLROnPlateau(optimizer_g, mode='min', factor=0.5, patience=5, verbose=True)
 
-    # Initialize DataLoaders
+    # DataLoaders
     try:
         train_loader = get_dataloader(
             data_dir=train_data_dir,
@@ -134,41 +101,37 @@ if __name__ == "__main__":
             shuffle=False,
             num_workers=0,
         )
-
     except FileNotFoundError as e:
         print(f"Error initializing DataLoaders: {e}")
         exit(1)
 
-    # Check dataset sizes
-    if len(train_loader.dataset) == 0:
-        print("Error: Train dataset is empty.")
-        exit(1)
-
-    if len(validate_loader.dataset) == 0:
-        print("Error: Validation dataset is empty.")
+    # Dataset size check
+    if len(train_loader.dataset) == 0 or len(validate_loader.dataset) == 0:
+        print("Error: Empty datasets.")
         exit(1)
 
     print(f"Train dataset size: {len(train_loader.dataset)}")
     print(f"Validation dataset size: {len(validate_loader.dataset)}")
 
-    # Start training
+    # Training process
     try:
         train(
             generator=generator,
             detector=detector,
             train_loader=train_loader,
             val_loader=validate_loader,
-            optimizer_g=optimizer_g,
-            optimizer_d=optimizer_d,
+            lr_g=learning_rate,
+            lr_d=learning_rate,
             device=device,
             num_epochs=num_epochs,
             compute_perceptual_loss=compute_perceptual_loss,
             checkpoint_path="./checkpoints",
             log_path="./logs/losses.csv",
-            masker=masker,
             update_csv=update_csv,
             initialize_csv=initialize_csv,
+            temperature=1.3,
+            scheduler=scheduler,
         )
     except Exception as e:
-        print(f"An error occurred during training: {e}")
+        print(f"Training error: {e}")
         exit(1)
