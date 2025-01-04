@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 import csv
 from pathlib import Path
 import torch
+from datetime import datetime
 
 
 def get_white_noise(chs: int = 1, num_frames: int = 1):
@@ -84,51 +85,64 @@ def masker(reference_chunk, chunk, P_mask, P_size, P_type):
 
 def initialize_csv(log_path):
     """
-    Initialize the losses.csv file if it doesn't exist.
+    Initialize the CSV file if it doesn't exist.
     Adds a header row to the file.
 
     Args:
-        log_path (str): Path to the losses.csv file.
+        log_path (str): Path to the CSV file.
     """
     if not Path(log_path).exists():
         with open(log_path, mode="w", newline="") as file:
             writer = csv.writer(file)
             writer.writerow([
-                "Start Date", "Start Time", "Epoch", "Training Accuracy (%)",
-                "Validation Accuracy (%)", "Training Perceptual Loss",
-                "Training Detection Loss", "Training Decoding Loss",
-                "Validation Perceptual Loss", "Validation Detection Loss",
-                "Validation Decoding Loss", "Train Bit Accuracy (%)" ," Validation Bit Accuracy (%)"
+                "Date", "Time", "Epoch", "Train_Bit_Recovery", 
+                "Train_Audio_Reconstruction", "Train_decoding_Loss", 
+                "Val_Bit_Recovery", "Val_Audio_Reconstruction", "Val_decoding_Loss"
             ])
 
 
-def update_csv(log_path, start_date, start_time, epoch, train_accuracy, val_accuracy,
-               train_perceptual_loss, train_detection_loss, train_decoding_loss,
-               val_perceptual_loss, val_detection_loss, val_decoding_loss):
+def update_csv(
+    log_path, 
+    epoch, 
+    train_bit_recovery, 
+    train_audio_reconstruction, 
+    train_decoding_loss, 
+    val_bit_recovery, 
+    val_audio_reconstruction, 
+    val_decoding_loss, 
+    date=None, 
+    time=None
+):
     """
-    Update the losses.csv file with the results of the current epoch.
+    Update the CSV file with a new row of data.
 
     Args:
-        log_path (str): Path to the losses.csv file.
-        start_date (str): Training start date.
-        start_time (str): Training start time.
-        epoch (int): Current epoch number.
-        train_accuracy (float): Training accuracy as a percentage.
-        val_accuracy (float): Validation accuracy as a percentage.
-        train_perceptual_loss (float): Training perceptual loss.
-        train_detection_loss (float): Training detection loss.
-        train_decoding_loss (float): Training decoding loss.
-        val_perceptual_loss (float): Validation perceptual loss.
-        val_detection_loss (float): Validation detection loss.
+        log_path (str): Path to the CSV file.
+        epoch (int): The epoch number.
+        train_bit_recovery (float): Train bit recovery metric.
+        train_audio_reconstruction (float): Train audio reconstruction metric.
+        train_decoding_loss (float): Train decoding loss.
+        val_bit_recovery (float): Validation bit recovery metric.
+        val_audio_reconstruction (float): Validation audio reconstruction metric.
         val_decoding_loss (float): Validation decoding loss.
+        date (str, optional): Date in "YYYY-MM-DD" format. Defaults to today's date if not provided.
+        time (str, optional): Time in "HH:MM:SS" format. Defaults to current time if not provided.
     """
+    # Use the current date and time if not provided
+    if date is None:
+        date = datetime.now().strftime("%Y-%m-%d")
+    if time is None:
+        time = datetime.now().strftime("%H:%M:%S")
+    
+    # Append the data to the CSV
     with open(log_path, mode="a", newline="") as file:
         writer = csv.writer(file)
         writer.writerow([
-            start_date, start_time, epoch, train_accuracy, val_accuracy,
-            train_perceptual_loss, train_detection_loss, train_decoding_loss,
-            val_perceptual_loss, val_detection_loss, val_decoding_loss
+            date, time, epoch, train_bit_recovery, train_audio_reconstruction, 
+            train_decoding_loss, val_bit_recovery, val_audio_reconstruction, 
+            val_decoding_loss
         ])
+
 
 
 def custom_collate_fn(batch):
