@@ -7,16 +7,14 @@ import sys
 import torch
 from torch.optim import Adam
 from pathlib import Path
-from src.training.trainLoop import train
 from src.allModels.models import AudioSealDetector, AudioSealWM, MsgProcessor
 from src.allModels.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from src.utils.data_prcocessing import get_dataloader
-from src.losses.loss import compute_detection_loss, compute_decoding_loss, compute_perceptual_loss
+from src.losses.loss import  compute_perceptual_loss
 from src.utils.utility_functions import masker,update_csv
 from src.utils.utility_functions import initialize_csv
 from src.tests.testLoop import train
 
-import torch
 
 def print_audio_shapes(data_loader, data_name):
     """
@@ -180,8 +178,6 @@ if __name__ == "__main__":
             optimizer_d=optimizer_d,
             device=device,
             num_epochs=num_epochs,
-            compute_detection_loss=compute_detection_loss,
-            compute_decoding_loss=compute_decoding_loss,
             compute_perceptual_loss=compute_perceptual_loss,
             checkpoint_path="./checkpoints",
             log_path="./logs/losses.csv",
