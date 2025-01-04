@@ -22,9 +22,9 @@ nbits = 32
 latent_dim = 128
 
 # Data paths
-train_data_dir = Path("/content/TDSI/data/test").resolve()
-test_data_dir = Path("/content/TDSI/data/test").resolve()
-validate_data_dir = Path("/content/TDSI/data/test").resolve()
+train_data_dir = Path("/content/TDSI/data/train").resolve()
+test_data_dir = Path("/content/TDSI/data/validate").resolve()
+validate_data_dir = Path("/content/TDSI/data/validate").resolve()
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
