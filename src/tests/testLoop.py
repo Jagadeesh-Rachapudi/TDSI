@@ -115,7 +115,7 @@ def train(
             total_bits_correct_train += correct_bits_train
 
             # Print batch progress and accuracy every 100 batches
-            if (batch_idx + 1) % 100 == 0:
+            if (batch_idx + 1) % 50 == 0:
                 batch_bit_accuracy = (total_bits_correct_train / total_bits_train) * 100
                 print(f"Batch {batch_idx + 1}/{len(train_loader)}: Loss={total_loss:.4f}, Bit Accuracy={batch_bit_accuracy:.2f}%")
 
