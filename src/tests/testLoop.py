@@ -1,3 +1,4 @@
+import sys
 import torch
 from pathlib import Path
 from datetime import datetime
@@ -26,12 +27,10 @@ def train(
     optimizer_g = torch.optim.Adam(generator.parameters(), lr=lr_g, weight_decay=1e-4)
     optimizer_d = torch.optim.Adam(detector.parameters(), lr=lr_d, weight_decay=1e-4)
 
-    best_val_loss = float("inf")
-    patience = 5
-    epochs_without_improvement = 0
+    print("Starting training...")
 
     for epoch in range(num_epochs):
-        print(f"Epoch [{epoch + 1}/{num_epochs}]")
+        print(f"Epoch {epoch + 1}/{num_epochs}")
         generator.train()
         detector.train()
 
@@ -50,10 +49,11 @@ def train(
             watermarked_audio = generator(audio, sample_rate=16000, message=labels_binary, alpha=1.0)
             detection_score, decoded_message_logits = detector(watermarked_audio)
 
-            if compute_perceptual_loss:
-                gen_audio_loss = compute_perceptual_loss(audio, watermarked_audio)
-            else:
-                gen_audio_loss = torch.nn.functional.mse_loss(audio, watermarked_audio)
+            gen_audio_loss = (
+                compute_perceptual_loss(audio, watermarked_audio)
+                if compute_perceptual_loss
+                else torch.nn.functional.mse_loss(audio, watermarked_audio)
+            )
 
             scaled_logits = decoded_message_logits / temperature
             label_loss = torch.nn.functional.binary_cross_entropy_with_logits(
@@ -81,11 +81,18 @@ def train(
             total_bits_train += total_bits
             total_bits_correct_train += correct_bits
 
+            if batch_idx % 10 == 0:
+                sys.stdout.write(
+                    f"\rBatch {batch_idx}/{len(train_loader)} - "
+                    f"Loss: {total_loss.item():.4f}, "
+                    f"Accuracy: {(correct_bits / total_bits) * 100:.2f}%"
+                )
+                sys.stdout.flush()
+
         if scheduler:
             scheduler.step(train_loss)
 
         train_bit_accuracy = (total_bits_correct_train / total_bits_train) * 100
-        print(f"Epoch {epoch + 1}: Train Accuracy: {train_bit_accuracy:.2f}%")
-
-        # Validation loop and model checkpointing logic...
-        # (Continue from previous implementation, adding dynamic LR adjustments)
+        print(
+            f"\nEpoch {epoch + 1} Summary: Train Loss: {train_loss:.4f}, Train Accuracy: {train_bit_accuracy:.2f}%"
+        )
