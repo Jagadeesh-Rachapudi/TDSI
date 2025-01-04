@@ -171,24 +171,24 @@ if __name__ == "__main__":
 
     # # Start training
     try:
-    #     # train(
-    #     #     generator=generator,
-    #     #     detector=detector,
-    #     #     train_loader=train_loader,
-    #     #     val_loader=validate_loader,
-    #     #     optimizer_g=optimizer_g,
-    #     #     optimizer_d=optimizer_d,
-    #     #     device=device,
-    #     #     num_epochs=num_epochs,
-    #     #     compute_detection_loss=compute_detection_loss,
-    #     #     compute_decoding_loss=compute_decoding_loss,
-    #     #     compute_perceptual_loss=compute_perceptual_loss,
-    #     #     checkpoint_path="./checkpoints",
-    #     #     log_path="./logs/losses.csv",
-    #     #     masker=masker,
-    #     #     update_csv=update_csv,
-    #     #     initialize_csv=initialize_csv
-    #     # )
+        # train(
+        #     generator=generator,
+        #     detector=detector,
+        #     train_loader=train_loader,
+        #     val_loader=validate_loader,
+        #     optimizer_g=optimizer_g,
+        #     optimizer_d=optimizer_d,
+        #     device=device,
+        #     num_epochs=num_epochs,
+        #     compute_detection_loss=compute_detection_loss,
+        #     compute_decoding_loss=compute_decoding_loss,
+        #     compute_perceptual_loss=compute_perceptual_loss,
+        #     checkpoint_path="./checkpoints",
+        #     log_path="./logs/losses.csv",
+        #     masker=masker,
+        #     update_csv=update_csv,
+        #     initialize_csv=initialize_csv
+        # )
         trainTest(
             generator=generator,
             detector=detector,
