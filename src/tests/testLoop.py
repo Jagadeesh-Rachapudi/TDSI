@@ -1,9 +1,26 @@
+import os
 import time
 import sys
+import logging
 import torch
 from pathlib import Path
 from datetime import datetime
 from torch.nn.utils import clip_grad_norm_
+
+def setup_logging(log_file_path):
+    # Set up logging to file for output logs
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_file_path, mode="a"),
+            logging.StreamHandler(sys.stdout)  # Keeps stdout active for regular output
+        ]
+    )
+    # Create an error logger for console output
+    error_handler = logging.StreamHandler(sys.stderr)
+    error_handler.setLevel(logging.ERROR)
+    logging.getLogger().addHandler(error_handler)
 
 def train(
     generator,
@@ -22,17 +39,22 @@ def train(
     temperature=1.0,
     scheduler=None,
 ):
+    # Ensure checkpoint and log directories exist
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
+    Path("/content/TDSI/logs").mkdir(parents=True, exist_ok=True)
     initialize_csv(log_path)
+
+    log_file_path = "/content/TDSI/logs/log.txt"
+    setup_logging(log_file_path)
+
+    logging.info("Starting training...")
 
     optimizer_g = torch.optim.Adam(generator.parameters(), lr=lr_g, weight_decay=1e-4)
     optimizer_d = torch.optim.Adam(detector.parameters(), lr=lr_d, weight_decay=1e-4)
 
-    print("Starting training...")
-
     for epoch in range(num_epochs):
         epoch_start_time = time.time()
-        print(f"\nEpoch {epoch + 1}/{num_epochs}")
+        logging.info(f"\nEpoch {epoch + 1}/{num_epochs}")
         generator.train()
         detector.train()
 
@@ -43,59 +65,61 @@ def train(
         total_bits_correct_train = 0
 
         for batch_idx, (audio_tensors, labels) in enumerate(train_loader):
-            audio = torch.cat(audio_tensors, dim=0).to(device)
-            labels = torch.tensor(labels, dtype=torch.int32).to(device)
-            labels_binary = torch.stack([(labels >> i) & 1 for i in range(32)], dim=-1).to(device)
+            try:
+                audio = torch.cat(audio_tensors, dim=0).to(device)
+                labels = torch.tensor(labels, dtype=torch.int32).to(device)
+                labels_binary = torch.stack([(labels >> i) & 1 for i in range(32)], dim=-1).to(device)
 
-            audio = audio.unsqueeze(1)
+                audio = audio.unsqueeze(1)
 
-            # Forward pass
-            watermarked_audio = generator(audio, sample_rate=16000, message=labels_binary, alpha=1.0)
-            detection_score, decoded_message_logits = detector(watermarked_audio)
+                # Forward pass
+                watermarked_audio = generator(audio, sample_rate=16000, message=labels_binary, alpha=1.0)
+                detection_score, decoded_message_logits = detector(watermarked_audio)
 
-            gen_audio_loss = (
-                compute_perceptual_loss(audio, watermarked_audio)
-                if compute_perceptual_loss
-                else torch.nn.functional.mse_loss(audio, watermarked_audio)
-            )
-
-            scaled_logits = decoded_message_logits / temperature
-            label_loss = torch.nn.functional.binary_cross_entropy_with_logits(
-                scaled_logits, labels_binary.float()
-            )
-
-            total_loss = 0.5 * gen_audio_loss + 1.5 * label_loss
-
-            optimizer_g.zero_grad()
-            optimizer_d.zero_grad()
-            total_loss.backward()
-
-            # Gradient clipping
-            clip_grad_norm_(generator.parameters(), max_norm=5)
-            clip_grad_norm_(detector.parameters(), max_norm=5)
-
-            optimizer_g.step()
-            optimizer_d.step()
-
-            predictions = (decoded_message_logits > 0).int()
-            correct_bits = (predictions == labels_binary).sum().item()
-            total_bits = labels_binary.numel()
-
-            train_loss += total_loss.item()
-            train_gen_loss += gen_audio_loss.item()
-            train_label_loss += label_loss.item()
-            total_bits_train += total_bits
-            total_bits_correct_train += correct_bits
-
-            if batch_idx % 10 == 0:
-                sys.stdout.write(
-                    f"\rBatch {batch_idx}/{len(train_loader)} - "
-                    f"Total Loss: {total_loss.item():.4f}, "
-                    f"Gen Loss: {gen_audio_loss.item():.4f}, "
-                    f"Label Loss: {label_loss.item():.4f}, "
-                    f"Batch Accuracy: {(correct_bits / total_bits) * 100:.2f}%"
+                gen_audio_loss = (
+                    compute_perceptual_loss(audio, watermarked_audio)
+                    if compute_perceptual_loss
+                    else torch.nn.functional.mse_loss(audio, watermarked_audio)
                 )
-                sys.stdout.flush()
+
+                scaled_logits = decoded_message_logits / temperature
+                label_loss = torch.nn.functional.binary_cross_entropy_with_logits(
+                    scaled_logits, labels_binary.float()
+                )
+
+                total_loss = 1.0 * gen_audio_loss + 1.0 * label_loss
+
+                optimizer_g.zero_grad()
+                optimizer_d.zero_grad()
+                total_loss.backward()
+
+                # Gradient clipping
+                clip_grad_norm_(generator.parameters(), max_norm=5)
+                clip_grad_norm_(detector.parameters(), max_norm=5)
+
+                optimizer_g.step()
+                optimizer_d.step()
+
+                predictions = (decoded_message_logits > 0).int()
+                correct_bits = (predictions == labels_binary).sum().item()
+                total_bits = labels_binary.numel()
+
+                train_loss += total_loss.item()
+                train_gen_loss += gen_audio_loss.item()
+                train_label_loss += label_loss.item()
+                total_bits_train += total_bits
+                total_bits_correct_train += correct_bits
+
+                if batch_idx % 10 == 0:
+                    logging.info(
+                        f"Batch {batch_idx}/{len(train_loader)} - "
+                        f"Total Loss: {total_loss.item():.4f}, "
+                        f"Gen Loss: {gen_audio_loss.item():.4f}, "
+                        f"Label Loss: {label_loss.item():.4f}, "
+                        f"Batch Accuracy: {(correct_bits / total_bits) * 100:.2f}%"
+                    )
+            except Exception as e:
+                logging.error(f"Error during training batch {batch_idx}: {e}", exc_info=True)
 
         if scheduler:
             scheduler.step(train_loss)
@@ -103,7 +127,7 @@ def train(
         train_bit_accuracy = (total_bits_correct_train / total_bits_train) * 100
         epoch_duration = time.time() - epoch_start_time
 
-        print(
+        logging.info(
             f"\nEpoch {epoch + 1} Summary: "
             f"Train Loss: {train_loss:.4f}, Gen Loss: {train_gen_loss:.4f}, Label Loss: {train_label_loss:.4f}, "
             f"Train Accuracy: {train_bit_accuracy:.2f}%, Duration: {epoch_duration:.2f}s"
@@ -121,7 +145,7 @@ def train(
             },
             checkpoint_file,
         )
-        print(f"Checkpoint saved: {checkpoint_file}")
+        logging.info(f"Checkpoint saved: {checkpoint_file}")
 
         # Validation step
         generator.eval()
@@ -131,25 +155,28 @@ def train(
             val_total_bits = 0
             val_correct_bits = 0
             for val_audio_tensors, val_labels in val_loader:
-                val_audio = torch.cat(val_audio_tensors, dim=0).to(device)
-                val_labels = torch.tensor(val_labels, dtype=torch.int32).to(device)
-                val_labels_binary = torch.stack([(val_labels >> i) & 1 for i in range(32)], dim=-1).to(device)
-                val_audio = val_audio.unsqueeze(1)
+                try:
+                    val_audio = torch.cat(val_audio_tensors, dim=0).to(device)
+                    val_labels = torch.tensor(val_labels, dtype=torch.int32).to(device)
+                    val_labels_binary = torch.stack([(val_labels >> i) & 1 for i in range(32)], dim=-1).to(device)
+                    val_audio = val_audio.unsqueeze(1)
 
-                val_watermarked_audio = generator(val_audio, sample_rate=16000, message=val_labels_binary, alpha=1.0)
-                _, val_decoded_message_logits = detector(val_watermarked_audio)
+                    val_watermarked_audio = generator(val_audio, sample_rate=16000, message=val_labels_binary, alpha=1.0)
+                    _, val_decoded_message_logits = detector(val_watermarked_audio)
 
-                val_scaled_logits = val_decoded_message_logits / temperature
-                val_loss += torch.nn.functional.binary_cross_entropy_with_logits(
-                    val_scaled_logits, val_labels_binary.float()
-                ).item()
+                    val_scaled_logits = val_decoded_message_logits / temperature
+                    val_loss += torch.nn.functional.binary_cross_entropy_with_logits(
+                        val_scaled_logits, val_labels_binary.float()
+                    ).item()
 
-                val_predictions = (val_decoded_message_logits > 0).int()
-                val_correct_bits += (val_predictions == val_labels_binary).sum().item()
-                val_total_bits += val_labels_binary.numel()
+                    val_predictions = (val_decoded_message_logits > 0).int()
+                    val_correct_bits += (val_predictions == val_labels_binary).sum().item()
+                    val_total_bits += val_labels_binary.numel()
+                except Exception as e:
+                    logging.error(f"Error during validation batch: {e}", exc_info=True)
 
             val_bit_accuracy = (val_correct_bits / val_total_bits) * 100
-            print(
+            logging.info(
                 f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_bit_accuracy:.2f}%"
             )
 
@@ -164,3 +191,6 @@ def train(
             val_loss,
             val_bit_accuracy,
         )
+
+    logging.info(f"Logs saved to {log_file_path}")
+    
