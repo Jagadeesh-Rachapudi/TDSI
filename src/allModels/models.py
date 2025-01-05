@@ -1,23 +1,9 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-
-import logging
 from typing import Optional, Tuple
 
 import julius
 import torch
 
 from src.allModels.SEANet import SEANetEncoderKeepDimension
-
-
-logger = logging.getLogger("Audioseal")
-
-COMPATIBLE_WARNING = """
-"""
-
 
 class MsgProcessor(torch.nn.Module):
     """
@@ -98,7 +84,6 @@ class AudioSealWM(torch.nn.Module):
         """
         length = x.size(-1)
         if sample_rate is None:
-            logger.warning(COMPATIBLE_WARNING)
             sample_rate = 16_000
         assert sample_rate
         if sample_rate != 16000:
@@ -136,7 +121,6 @@ class AudioSealWM(torch.nn.Module):
     ) -> torch.Tensor:
         """Apply the watermarking to the audio signal x with a tune-down ratio (default 1.0)"""
         if sample_rate is None:
-            logger.warning(COMPATIBLE_WARNING)
             sample_rate = 16_000
         wm = self.get_watermark(x, sample_rate=sample_rate, message=message)
         return x + alpha * wm
@@ -178,7 +162,6 @@ class AudioSealDetector(torch.nn.Module):
                 of each bits being 0 or 1) into the binary n-bit message.
         """
         if sample_rate is None:
-            logger.warning(COMPATIBLE_WARNING)
             sample_rate = 16_000
         result, message = self.forward(x, sample_rate=sample_rate)  # b x 2+nbits
         detected = (
@@ -214,7 +197,6 @@ class AudioSealDetector(torch.nn.Module):
             sample_rate: The sample rate of the input audio
         """
         if sample_rate is None:
-            logger.warning(COMPATIBLE_WARNING)
             sample_rate = 16_000
         assert sample_rate
         if sample_rate != 16000:
