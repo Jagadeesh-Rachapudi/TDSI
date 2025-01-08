@@ -26,8 +26,8 @@ decoder = SEANetDecoder(
 wm_model = AudioSealWM(encoder=encoder, decoder=decoder).to(device)
 
 # Load pre-trained model weights
-checkpoint_path = r"C:\Users\HP\TDSI\trainedModels\TDSI\Generator\BestModel.pth"
-checkpoint = torch.load(checkpoint_path, map_location=device)
+checkpoint_path = r"D:\trainedModels\TDSI\Generator\BestGenerator.pth"
+checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
 wm_model.load_state_dict(checkpoint["generator_state_dict"])
 print("Pre-trained model loaded successfully.")
 
