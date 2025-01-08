@@ -28,4 +28,4 @@ __pycache__
 
 __pycache__
 
-/trainedModels/TDSI/Generator/BestModel.pth
+*.pth
