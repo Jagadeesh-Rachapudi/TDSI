@@ -34,27 +34,17 @@ def train(
         print(f"\nEpoch {epoch + 1}/{num_epochs}")
         generator.train()
 
-        train_loss, train_gen_loss = 0, 0
+        train_loss = 0
         total_train_batches = len(train_loader)
 
         # Training loop
-        for batch_idx, (audio_tensors, labels) in enumerate(train_loader):
-            # Ensure audio_tensors is a list of tensors
-            if isinstance(audio_tensors, tuple):
-                audio_tensors = list(audio_tensors)
+        for batch_idx, (audio, labels) in enumerate(train_loader):
+            # Move audio and labels to device
+            audio = audio.to(device).unsqueeze(1)  # Add channel dimension
+            labels = labels.to(device)
 
-            # Concatenate audio tensors
-            audio = torch.cat(audio_tensors, dim=0).to(device)
-
-            # Process labels
-            labels = torch.tensor(labels, dtype=torch.int32).to(device)
-            labels_binary = torch.stack([(labels >> i) & 1 for i in range(32)], dim=-1).to(device)
-
-            # Add channel dimension to audio
-            audio = audio.unsqueeze(1)
-
-            # Generate random 33-bit messages
-            message = torch.randint(0, 2, (audio.size(0), 33)).float().to(device)
+            # Convert labels to 32-bit binary messages
+            message = torch.stack([(labels >> i) & 1 for i in range(32)], dim=-1).float()
 
             # Forward pass: Generate watermarked audio
             watermarked_audio = generator(audio, message)
@@ -66,6 +56,7 @@ def train(
                 else torch.nn.functional.mse_loss(audio, watermarked_audio)
             )
 
+            # Backward pass
             optimizer_g.zero_grad()
             gen_audio_loss.backward()
 
@@ -75,7 +66,6 @@ def train(
             optimizer_g.step()
 
             train_loss += gen_audio_loss.item()
-            train_gen_loss += gen_audio_loss.item()
 
             if (batch_idx + 1) % 10 == 0:
                 print(
@@ -87,9 +77,8 @@ def train(
         avg_train_loss = train_loss / total_train_batches
         epoch_duration = time.time() - epoch_start_time
 
-        # Print training epoch summary
         print(
-            f"\nEpoch {epoch + 1} Summary: "
+            f"Epoch {epoch + 1} Summary: "
             f"Training Loss: {avg_train_loss:.4f}, "
             f"Duration: {epoch_duration:.2f}s"
         )
@@ -100,30 +89,12 @@ def train(
         total_val_batches = len(val_loader)
 
         with torch.no_grad():
-            for val_batch_idx, batch in enumerate(val_loader):
-                # Unpack the batch (handling nested structures)
-                if isinstance(batch, list) and len(batch) == 2:
-                    val_audio_tensors, val_labels = batch
+            for val_audio, val_labels in val_loader:
+                val_audio = val_audio.to(device).unsqueeze(1)  # Add channel dimension
+                val_labels = val_labels.to(device)
 
-                    # Handle nested audio tensor structure
-                    if isinstance(val_audio_tensors, tuple) and len(val_audio_tensors) == 1:
-                        val_audio_tensors = val_audio_tensors[0]  # Extract the actual tensor
-
-                    # Handle nested label structure
-                    if isinstance(val_labels, tuple) and len(val_labels) == 1:
-                        val_labels = val_labels[0]  # Extract the actual label
-                else:
-                    raise ValueError(f"Unexpected batch format: {batch}")
-
-                # Concatenate audio tensors
-                val_audio = torch.cat([val_audio_tensors], dim=0).to(device)
-                val_audio = val_audio.unsqueeze(1)
-
-                # Reshape labels properly
-                val_labels = torch.tensor(val_labels, dtype=torch.int32).to(device).view(-1)
-
-                # Process labels for 33-bit message embedding
-                val_message = torch.stack([(val_labels >> i) & 1 for i in range(33)], dim=-1).float()
+                # Convert labels to 32-bit binary messages
+                val_message = torch.stack([(val_labels >> i) & 1 for i in range(32)], dim=-1).float()
 
                 # Forward pass: Generate watermarked audio
                 val_watermarked_audio = generator(val_audio, val_message)
@@ -139,7 +110,6 @@ def train(
 
         avg_val_loss = val_loss / total_val_batches
 
-        # Print validation epoch summary
         print(
             f"Validation Loss: {avg_val_loss:.4f}"
         )
@@ -160,12 +130,13 @@ def train(
         )
         print(f"Checkpoint saved: {checkpoint_file}")
 
-        # # Log training and validation metrics to CSV
-        # update_csv(
-        #     log_path=log_path,
-        #     epoch=epoch + 1,
-        #     train_audio_reconstruction=avg_train_loss,
-        #     val_audio_reconstruction=avg_val_loss,
-        # )
+        # Log training and validation metrics to CSV
+        if update_csv is not None:
+            update_csv(
+                log_path=log_path,
+                epoch=epoch + 1,
+                train_audio_reconstruction=avg_train_loss,
+                val_audio_reconstruction=avg_val_loss,
+            )
 
     print("Training completed.")
