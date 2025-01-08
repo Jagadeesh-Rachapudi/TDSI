@@ -1,101 +1,67 @@
 import torch
-
-from src.allModels.models import AudioSealDetector, AudioSealWM, MsgProcessor
+import numpy as np
+from src.allModels.models import AudioSealWM, Detector
 from src.allModels.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
+from src.utils.utility_functions import find_least_important_components
 
 # Configuration
-audio_length = 8000  # 0.5 seconds
-batch_size = 1       # Batch size
-nbits = 32           # Number of bits in the watermark message
-latent_dim = 128     # Latent space dimensionality
-
-# Use GPU if available
+audio_length = 8000
+batch_size = 1
+latent_dim = 128
+num_bits_to_embed = 32
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Initialize SEANet encoder and decoder
+# Initialize encoder and decoder
 encoder = SEANetEncoderKeepDimension(
-    channels=1,
-    dimension=latent_dim,
-    n_filters=32,
-    n_residual_layers=3,
-    ratios=[8, 5, 4, 2],
-    output_dim=latent_dim,
+    channels=1, dimension=latent_dim, n_filters=32, n_residual_layers=3, ratios=[8, 5, 4, 2], output_dim=latent_dim
 ).to(device)
 
 decoder = SEANetDecoder(
-    channels=1,
-    dimension=latent_dim,
-    n_filters=32,
-    n_residual_layers=3,
-    ratios=[8, 5, 4, 2],
+    channels=1, dimension=latent_dim, n_filters=32, n_residual_layers=3, ratios=[8, 5, 4, 2]
 ).to(device)
 
-# Initialize watermarking model (generator)
-wm_model = AudioSealWM(
-    encoder=encoder,
-    decoder=decoder,
-    msg_processor=None
+# Initialize generator
+generator = AudioSealWM(encoder=encoder, decoder=decoder).to(device)
+
+# Load pre-trained generator weights
+checkpoint_path = r"C:\Users\HP\TDSI\trainedModels\TDSI\Generator\BestModel.pth"
+checkpoint = torch.load(checkpoint_path, map_location=device)
+
+# Load encoder and decoder weights into the generator
+generator.encoder.load_state_dict(checkpoint["encoder_state_dict"])
+generator.decoder.load_state_dict(checkpoint["decoder_state_dict"])
+print("Generator weights loaded successfully.")
+
+# Initialize detector with the same encoder
+detector_encoder = SEANetEncoderKeepDimension(
+    channels=1, dimension=latent_dim, n_filters=32, n_residual_layers=3, ratios=[8, 5, 4, 2], output_dim=latent_dim
 ).to(device)
+detector_encoder.load_state_dict(checkpoint["encoder_state_dict"])
+print("Detector's encoder weights loaded successfully.")
 
 # Initialize detector
-detector = AudioSealDetector(
-    channels=1,
-    dimension=latent_dim,
-    n_filters=32,
-    n_residual_layers=3,
-    ratios=[8, 5, 4, 2],
-    output_dim=latent_dim,
-    nbits=nbits  # Set to 32 bits
-).to(device)
+detector = Detector(encoder=detector_encoder, latent_dim=latent_dim, msg_size=num_bits_to_embed).to(device)
 
-# Generate random input audio and 32-bit message
-audio = torch.randn(batch_size, 1, audio_length).to(device)  # Random audio input
-message = torch.randint(0, 2, (batch_size, nbits)).to(device)  # Random 32-bit binary message
+# Generate random input audio and message
+audio = torch.randn(batch_size, 1, audio_length).to(device)
+message = torch.randint(0, 2, (batch_size, num_bits_to_embed)).float().to(device)
 
-# Generate watermarked audio
-with torch.no_grad():
-    watermarked_audio = wm_model(audio, message=message)
+# Forward through generator to get watermarked audio
+watermarked_audio = generator(audio, message)
 
-# Detect watermark and decode message
-with torch.no_grad():
-    detection_score, decoded_message_logits = detector(watermarked_audio)
-    print("shape of decoded_message", decoded_message_logits.shape)
-    print("shape of detection score", detection_score.shape)
+# Perform PCA to find least important components
+latent_space_np = generator.encoder(audio).detach().cpu().numpy().reshape(-1, latent_dim)
+bit_positions, _ = find_least_important_components(latent_space_np, num_bits_to_embed)
+bit_positions = torch.tensor(bit_positions, dtype=torch.long).to(device)
 
-# Extract the bits from the logits
-decoded_message = (decoded_message_logits > 0.5).int()  # Convert logits to binary bits
+# Forward through detector to extract the message
+extracted_message = detector(watermarked_audio, bit_positions)
 
-# Calculate number of correctly identified bits
-correct_bits = (decoded_message == message).sum(dim=1)  # Sum correct bits per sample
-total_bits = message.size(1)  # Total number of bits per sample
+# Compare original and extracted message
+correct_bits = (extracted_message == message).sum().item()
+accuracy = (correct_bits / num_bits_to_embed) * 100
 
-# Calculate percentage of correctly decoded bits
-correct_bits_percentage = (correct_bits / total_bits) * 100
-
-# Determine if watermark is detected
-# Detection score is assumed to classify watermarked audio if score > 0.5
-watermark_detected = (detection_score[:, 1, :] > 0.5).float().mean(dim=1)  # Average over time
-watermark_detected_binary = (watermark_detected > 0.5).int()  # Binary classification
-
-# Print the results
-print("Number of Correct Bits Per Sample:", correct_bits.cpu().numpy())
-print("Percentage of Correct Bits Per Sample:", correct_bits_percentage.cpu().numpy())
-print("Watermark Detected (Yes/No, Binary):", watermark_detected_binary.cpu().numpy())
-
-# Print the input and output for manual inspection
-print("\nInput Audio for Detector:")
-print(watermarked_audio)
-
-print("\nDetection Score (Watermark Presence):")
-print(detection_score)
-
-print("\nOriginal Message:")
-print(message)
-
-print("\nDecoded Message:")
-print(decoded_message)
-
-# Check if all bits match for each sample
-for i in range(batch_size):
-    is_correct = correct_bits[i] == total_bits
-    print(f"Sample {i + 1}: {'Correctly Decoded' if is_correct else 'Decoding Error'}")
+# Print results
+print(f"Original Message: {message}")
+print(f"Extracted Message: {extracted_message}")
+print(f"Correct Bits: {correct_bits}/{num_bits_to_embed} ({accuracy:.2f}%)")
