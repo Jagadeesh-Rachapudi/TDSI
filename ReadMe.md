@@ -12,7 +12,7 @@
 
 # Abstract
 
-- **Key Feature:**
+- **Key Features:**
 
 # Installation
 
