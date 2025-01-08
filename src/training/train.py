@@ -58,7 +58,6 @@ if __name__ == "__main__":
     generator = AudioSealWM(
         encoder=encoder,
         decoder=decoder,
-        msg_processor=msg_processor,
     ).to(device)
 
     detector = AudioSealDetector(
