@@ -2,3 +2,5 @@ datasets
 flashy
 julius
 pydub
+matplotlib
+scikit-learn

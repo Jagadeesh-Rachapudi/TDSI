@@ -9,7 +9,7 @@ from src.allModels.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from src.utils.data_prcocessing import get_dataloader
 from src.losses.loss import compute_perceptual_loss
 from src.utils.utility_functions import update_csv, initialize_csv
-from src.tests.testLoop import train
+from src.tests.loopTest.testLoop import train
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from datetime import datetime
 

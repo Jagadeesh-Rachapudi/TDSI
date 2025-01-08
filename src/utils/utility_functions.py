@@ -6,16 +6,47 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
-# from utils.data_prcocessing import LazyAudioDataset
 import csv
 from pathlib import Path
 import torch
 from datetime import datetime
+import numpy as np
+from sklearn.decomposition import PCA
 
 
 def get_white_noise(chs: int = 1, num_frames: int = 1):
     wav = torch.randn(chs, num_frames)
     return wav
+
+
+
+def find_least_important_components(latent_space, num_bits):
+    """
+    Perform PCA on the latent space and find the components with the least variance.
+    
+    Args:
+        latent_space (np.ndarray): The latent space matrix (samples x features).
+        num_bits (int): Number of least important components to find.
+        
+    Returns:
+        least_important_indices (list): Indices of the components with the least variance.
+    """
+    n_samples, n_features = latent_space.shape
+    max_components = min(n_samples, n_features)  # Max allowable PCA components
+    
+    # Perform PCA with valid n_components
+    pca = PCA(n_components=max_components)
+    pca.fit(latent_space)
+    
+    # Get explained variance and their indices
+    explained_variance = pca.explained_variance_ratio_
+    sorted_indices = np.argsort(explained_variance)  # Sort indices by least variance
+    
+    # Select the indices of the least important components
+    least_important_indices = sorted_indices[:num_bits]
+    
+    return least_important_indices, explained_variance
+
 
 
 def masker(reference_chunk, chunk, P_mask, P_size, P_type):

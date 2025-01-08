@@ -4,6 +4,7 @@ import julius
 import torch
 
 from src.allModels.SEANet import SEANetEncoderKeepDimension
+from src.utils.utility_functions import find_least_important_components
 
 class MsgProcessor(torch.nn.Module):
     """
@@ -40,47 +41,73 @@ class MsgProcessor(torch.nn.Module):
         return hidden
 
 
+
+from typing import Optional, Tuple
+import torch
+import julius
+from src.utils.utility_functions import find_least_important_components
+
+
 class AudioSealWM(torch.nn.Module):
     """
-    Generate watermarking for a given audio signal
+    Perform audio reconstruction and message embedding.
     """
 
     def __init__(
         self,
         encoder: torch.nn.Module,
         decoder: torch.nn.Module,
-        msg_processor: Optional[torch.nn.Module] = None,
     ):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
-        # The build should take care of validating the dimensions between component
-        self.msg_processor = msg_processor
-        self._message: Optional[torch.Tensor] = None
 
-    @property
-    def message(self) -> Optional[torch.Tensor]:
-        return self._message
-
-    @message.setter
-    def message(self, message: torch.Tensor) -> None:
-        self._message = message
-
-    def get_watermark(
+    def embed_bits_in_latent_space(
         self,
-        x: torch.Tensor,
-        sample_rate: Optional[int] = None,
-        message: Optional[torch.Tensor] = None,
+        latent_space: torch.Tensor,
+        message: torch.Tensor,
+        num_bits: int = 33,
     ) -> torch.Tensor:
         """
-        Get the watermark from an audio tensor and a message.
-        If the input message is None, a random message of
-        n bits {0,1} will be generated.
+        Embed a message into the latent space by replacing values at the least important components.
+
         Args:
-            x: Audio signal, size: batch x frames
-            sample_rate: The sample rate of the input audio (default 16khz as
-                currently supported by the main AudioSeal model)
-            message: An optional binary message, size: batch x k
+            latent_space: Latent representation of the audio, size: batch x features x time_steps
+            message: Binary message to embed, size: num_bits
+            num_bits: Number of bits to embed (default: 33)
+
+        Returns:
+            updated_latent_space: Latent space with the message embedded
+        """
+        # Convert latent space to numpy for PCA analysis
+        latent_space_np = latent_space.detach().cpu().numpy().reshape(-1, latent_space.shape[1])
+
+        # Find least important components for embedding
+        least_important_indices, _ = find_least_important_components(latent_space_np, num_bits)
+
+        # Embed the message in the latent space
+        updated_latent_space = latent_space.clone()
+        for i, idx in enumerate(least_important_indices):
+            updated_latent_space[:, idx, :] = message[i].item()
+
+        return updated_latent_space
+
+    def reconstruct_with_message(
+        self,
+        x: torch.Tensor,
+        message: torch.Tensor,
+        sample_rate: Optional[int] = None,
+    ) -> torch.Tensor:
+        """
+        Embed a message into the latent space and reconstruct the audio.
+
+        Args:
+            x: Input audio signal, size: batch x frames
+            message: Binary message to embed, size: num_bits
+            sample_rate: The sample rate of the input audio (default 16kHz)
+
+        Returns:
+            reconstructed_audio: Reconstructed audio signal with the message embedded
         """
         length = x.size(-1)
         if sample_rate is None:
@@ -88,43 +115,43 @@ class AudioSealWM(torch.nn.Module):
         assert sample_rate
         if sample_rate != 16000:
             x = julius.resample_frac(x, old_sr=sample_rate, new_sr=16000)
-        hidden = self.encoder(x)
+        
+        # Step 1: Encode the audio into the latent space
+        latent_space = self.encoder(x)
 
-        if self.msg_processor is not None:
-            if message is None:
-                if self.message is None:
-                    message = torch.randint(
-                        0, 2, (x.shape[0], self.msg_processor.nbits), device=x.device
-                    )
-                else:
-                    message = self.message.to(device=x.device)
-            else:
-                message = message.to(device=x.device)
+        # Step 2: Embed the message into the latent space
+        updated_latent_space = self.embed_bits_in_latent_space(latent_space, message)
 
-            hidden = self.msg_processor(hidden, message)
-
-        watermark = self.decoder(hidden)
+        # Step 3: Decode the updated latent space to reconstruct the audio
+        reconstructed_audio = self.decoder(updated_latent_space)
 
         if sample_rate != 16000:
-            watermark = julius.resample_frac(
-                watermark, old_sr=16000, new_sr=sample_rate
+            reconstructed_audio = julius.resample_frac(
+                reconstructed_audio, old_sr=16000, new_sr=sample_rate
             )
 
-        return watermark[..., :length]  # trim output cf encodec codebase
+        return reconstructed_audio[..., :length]  # Trim output to input length
 
     def forward(
         self,
         x: torch.Tensor,
+        message: torch.Tensor,
         sample_rate: Optional[int] = None,
-        message: Optional[torch.Tensor] = None,
-        alpha: float = 1.0,
     ) -> torch.Tensor:
-        """Apply the watermarking to the audio signal x with a tune-down ratio (default 1.0)"""
-        if sample_rate is None:
-            sample_rate = 16_000
-        wm = self.get_watermark(x, sample_rate=sample_rate, message=message)
-        return x + alpha * wm
+        """
+        Combine audio and message, and reproduce the audio.
 
+        Args:
+            x: Input audio signal, size: batch x frames
+            message: Binary message to embed, size: num_bits
+            sample_rate: Sample rate of the input audio
+
+        Returns:
+            reconstructed_audio: Reconstructed audio signal with the message embedded
+        """
+        return self.reconstruct_with_message(x, message, sample_rate=sample_rate)
+
+    
 
 class AudioSealDetector(torch.nn.Module):
     """
