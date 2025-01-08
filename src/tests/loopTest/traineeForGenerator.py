@@ -38,8 +38,19 @@ def train(
         total_train_batches = len(train_loader)
 
         # Training loop
-        for batch_idx, audio_tensors in enumerate(train_loader):
+        for batch_idx, (audio_tensors, labels) in enumerate(train_loader):
+            # Ensure audio_tensors is a list of tensors
+            if isinstance(audio_tensors, tuple):
+                audio_tensors = list(audio_tensors)
+
+            # Concatenate audio tensors
             audio = torch.cat(audio_tensors, dim=0).to(device)
+
+            # Process labels
+            labels = torch.tensor(labels, dtype=torch.int32).to(device)
+            labels_binary = torch.stack([(labels >> i) & 1 for i in range(32)], dim=-1).to(device)
+
+            # Add channel dimension to audio
             audio = audio.unsqueeze(1)
 
             # Generate random 33-bit messages
@@ -89,12 +100,30 @@ def train(
         total_val_batches = len(val_loader)
 
         with torch.no_grad():
-            for val_batch_idx, val_audio_tensors in enumerate(val_loader):
-                val_audio = torch.cat(val_audio_tensors, dim=0).to(device)
+            for val_batch_idx, batch in enumerate(val_loader):
+                # Unpack the batch (handling nested structures)
+                if isinstance(batch, list) and len(batch) == 2:
+                    val_audio_tensors, val_labels = batch
+
+                    # Handle nested audio tensor structure
+                    if isinstance(val_audio_tensors, tuple) and len(val_audio_tensors) == 1:
+                        val_audio_tensors = val_audio_tensors[0]  # Extract the actual tensor
+
+                    # Handle nested label structure
+                    if isinstance(val_labels, tuple) and len(val_labels) == 1:
+                        val_labels = val_labels[0]  # Extract the actual label
+                else:
+                    raise ValueError(f"Unexpected batch format: {batch}")
+
+                # Concatenate audio tensors
+                val_audio = torch.cat([val_audio_tensors], dim=0).to(device)
                 val_audio = val_audio.unsqueeze(1)
 
-                # Generate random 33-bit messages for validation
-                val_message = torch.randint(0, 2, (val_audio.size(0), 33)).float().to(device)
+                # Reshape labels properly
+                val_labels = torch.tensor(val_labels, dtype=torch.int32).to(device).view(-1)
+
+                # Process labels for 33-bit message embedding
+                val_message = torch.stack([(val_labels >> i) & 1 for i in range(33)], dim=-1).float()
 
                 # Forward pass: Generate watermarked audio
                 val_watermarked_audio = generator(val_audio, val_message)
@@ -131,12 +160,12 @@ def train(
         )
         print(f"Checkpoint saved: {checkpoint_file}")
 
-        # Log training and validation metrics to CSV
-        update_csv(
-            log_path=log_path,
-            epoch=epoch + 1,
-            train_audio_reconstruction=avg_train_loss,
-            val_audio_reconstruction=avg_val_loss,
-        )
+        # # Log training and validation metrics to CSV
+        # update_csv(
+        #     log_path=log_path,
+        #     epoch=epoch + 1,
+        #     train_audio_reconstruction=avg_train_loss,
+        #     val_audio_reconstruction=avg_val_loss,
+        # )
 
     print("Training completed.")

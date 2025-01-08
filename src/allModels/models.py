@@ -88,7 +88,8 @@ class AudioSealWM(torch.nn.Module):
         # Embed the message in the latent space
         updated_latent_space = latent_space.clone()
         for i, idx in enumerate(least_important_indices):
-            updated_latent_space[:, idx, :] = message[i].item()
+            # Embed the i-th bit into the latent space at index `idx` for all time steps
+            updated_latent_space[:, idx, :] = message[:, i].unsqueeze(-1)
 
         return updated_latent_space
 
