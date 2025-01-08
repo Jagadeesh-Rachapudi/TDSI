@@ -116,11 +116,9 @@ if __name__ == "__main__":
     try:
         train(
             generator=generator,
-            detector=detector,
             train_loader=train_loader,
             val_loader=validate_loader,
             lr_g=learning_rate,
-            lr_d=learning_rate,
             device=device,
             num_epochs=num_epochs,
             compute_perceptual_loss=compute_perceptual_loss,
@@ -128,7 +126,6 @@ if __name__ == "__main__":
             log_path="./logs/losses.csv",
             update_csv=update_csv,
             initialize_csv=initialize_csv,
-            temperature=1.3,
             scheduler=scheduler,
         )
     except Exception as e:
