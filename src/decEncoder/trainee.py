@@ -145,7 +145,7 @@ def train(
                 # Compute penalty-based bit-wise loss
                 val_bit_loss = penalty_based_bit_loss(val_extracted_bits, val_message)
 
-                # Accumulate validation losses
+                # Accumulate validation losse s
                 val_detector_loss += val_bit_loss.item()
 
         avg_val_detector_loss = val_detector_loss / total_val_batches
