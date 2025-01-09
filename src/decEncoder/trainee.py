@@ -69,9 +69,33 @@ def train(
 
         # Training loop
         for batch_idx, (audio, labels) in enumerate(train_loader):
-            # Move audio and labels to device
+            # Handle cases where train_loader returns tuples with additional metadata
+            if isinstance(audio, tuple):
+                audio = audio[0]  # Extract the tensor if it's wrapped in a tuple
+            if isinstance(labels, tuple):
+                labels = labels[0]
+
+            # Convert audio to tensor if it's not already
+            if not isinstance(audio, torch.Tensor):
+                raise TypeError(f"Expected 'audio' to be a tensor, but got {type(audio)}")
+            
+            # Handle labels that are integers or lists of integers
+            if isinstance(labels, int):  # Single integer
+                labels = torch.tensor([labels], dtype=torch.long)
+            elif isinstance(labels, list):  # List of integers
+                labels = torch.tensor(labels, dtype=torch.long)
+
+            # Ensure labels are tensors
+            if not isinstance(labels, torch.Tensor):
+                raise TypeError(f"Expected 'labels' to be a tensor, but got {type(labels)}")
+
+            # Move data to the device
             audio = audio.to(device).unsqueeze(1)  # Add channel dimension if needed
             labels = labels.to(device)
+
+            # Debug print (optional) to verify the shapes
+            print(f"Batch {batch_idx}: Audio Shape: {audio.shape}, Labels Shape: {labels.shape}")
+
 
             # Convert labels to 32-bit binary messages
             message = torch.stack([(labels >> i) & 1 for i in range(32)], dim=-1).float().to(device)
@@ -119,9 +143,34 @@ def train(
         total_val_batches = len(val_loader)
 
         with torch.no_grad():
-            for val_audio, val_labels in val_loader:
-                val_audio = val_audio.to(device).unsqueeze(1)
-                val_labels = val_labels.to(device)
+            for batch_idx, (audio, labels) in enumerate(train_loader):
+                # Handle cases where train_loader returns tuples with additional metadata
+                if isinstance(audio, tuple):
+                    audio = audio[0]  # Extract the tensor if it's wrapped in a tuple
+                if isinstance(labels, tuple):
+                    labels = labels[0]
+
+                # Convert audio to tensor if it's not already
+                if not isinstance(audio, torch.Tensor):
+                    raise TypeError(f"Expected 'audio' to be a tensor, but got {type(audio)}")
+                
+                # Handle labels that are integers or lists of integers
+                if isinstance(labels, int):  # Single integer
+                    labels = torch.tensor([labels], dtype=torch.long)
+                elif isinstance(labels, list):  # List of integers
+                    labels = torch.tensor(labels, dtype=torch.long)
+
+                # Ensure labels are tensors
+                if not isinstance(labels, torch.Tensor):
+                    raise TypeError(f"Expected 'labels' to be a tensor, but got {type(labels)}")
+
+                # Move data to the device
+                val_audio = audio.to(device).unsqueeze(1)  # Add channel dimension if needed
+                val_labels = labels.to(device)
+
+                # Debug print (optional) to verify the shapes
+                print(f"Batch {batch_idx}: Audio Shape: {audio.shape}, Labels Shape: {labels.shape}")
+
 
                 # Convert labels to 32-bit binary messages
                 val_message = torch.stack([(val_labels >> i) & 1 for i in range(32)], dim=-1).float()

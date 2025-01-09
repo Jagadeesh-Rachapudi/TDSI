@@ -15,9 +15,9 @@ TEST_DIR = "data/"
 VALIDATE_DIR = "data/"
 
 # Specify lengths (set to None to move all files)
-TRAIN_LEN = None  # Set to an integer to move a specific number of training files
-TEST_LEN = None   # Set to an integer to move a specific number of test files
-VALIDATE_LEN = None  # Set to an integer to move a specific number of validation files
+TRAIN_LEN = 500  # Set to an integer to move a specific number of training files
+TEST_LEN = 50   # Set to an integer to move a specific number of test files
+VALIDATE_LEN = 50  # Set to an integer to move a specific number of validation files
 
 def clone_repo():
     # Clone the repository

@@ -8,7 +8,6 @@ from src.decEncoder.models import AudioSealWM, Detector
 from src.allModels.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from src.utils.data_prcocessing import get_dataloader
 from src.losses.loss import compute_perceptual_loss
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from src.decEncoder.trainee import train
 
 # Configuration
@@ -23,7 +22,8 @@ latent_dim = 128
 train_data_dir = Path("/content/TDSI/data/train").resolve()
 test_data_dir = Path("/content/TDSI/data/validate").resolve()
 validate_data_dir = Path("/content/TDSI/data/validate").resolve()
-best_model_path = Path("/content/BestGenEncoder.pth")
+best_genEncoder = Path("/content/BestGenEncoder.pth").resolve()
+best_decEncoder = Path("/content/BestDecEncoder.pth").resolve()
 
 # Device configuration
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -66,17 +66,23 @@ if __name__ == "__main__":
         encoder=detector_encoder,
     ).to(device)
 
-    # Load pretrained weights if available
-    if best_model_path.exists():
-        print(f"Loading pretrained weights from {best_model_path}")
-        checkpoint = torch.load(best_model_path, map_location=device ,weights_only=True)
-        generator.encoder.load_state_dict(checkpoint["encoder_state_dict"])
-        generator.decoder.load_state_dict(checkpoint["decoder_state_dict"])
-        detector.encoder.load_state_dict(checkpoint["encoder_state_dict"])
+    # Load pre-trained weights for generator and detector
+    if best_genEncoder.exists():
+        print(f"Loading generator weights from {best_genEncoder}")
+        gen_checkpoint = torch.load(best_genEncoder, map_location=device)
+        generator.encoder.load_state_dict(gen_checkpoint["encoder_state_dict"])
+        generator.decoder.load_state_dict(gen_checkpoint["decoder_state_dict"])
     else:
-        print(f"Warning: Pretrained weights not found at {best_model_path}")
+        print(f"Warning: Pre-trained generator weights not found at {best_genEncoder}")
 
-    # Optimizers and scheduler
+    if best_decEncoder.exists():
+        print(f"Loading detector weights from {best_decEncoder}")
+        dec_checkpoint = torch.load(best_decEncoder, map_location=device)
+        detector.encoder.load_state_dict(dec_checkpoint["detector_state_dict"])
+    else:
+        print(f"Warning: Pre-trained detector weights not found at {best_decEncoder}")
+
+    # Optimizers
     optimizer_g = Adam(generator.parameters(), lr=learning_rate, weight_decay=1e-4)
     optimizer_d = Adam(detector.parameters(), lr=learning_rate, weight_decay=1e-4)
 
