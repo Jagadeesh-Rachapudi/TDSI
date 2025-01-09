@@ -89,7 +89,7 @@ if __name__ == "__main__":
             data_dir=test_data_dir,
             batch_size=batch_size,
             sample_rate=audio_length,
-            shuffle=False,
+            shuffle=True,
             num_workers=0,
         )
 
@@ -97,7 +97,7 @@ if __name__ == "__main__":
             data_dir=validate_data_dir,
             batch_size=batch_size,
             sample_rate=audio_length,
-            shuffle=False,
+            shuffle=True,
             num_workers=0,
         )
     except FileNotFoundError as e:
