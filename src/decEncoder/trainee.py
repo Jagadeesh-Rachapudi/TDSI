@@ -93,10 +93,6 @@ def train(
             audio = audio.to(device).unsqueeze(1)  # Add channel dimension if needed
             labels = labels.to(device)
 
-            # Debug print (optional) to verify the shapes
-            print(f"Batch {batch_idx}: Audio Shape: {audio.shape}, Labels Shape: {labels.shape}")
-
-
             # Convert labels to 32-bit binary messages
             message = torch.stack([(labels >> i) & 1 for i in range(32)], dim=-1).float().to(device)
 
@@ -126,6 +122,13 @@ def train(
             # Accumulate losses
             train_detector_loss += bit_loss.item()
 
+            # Log every 10 batches
+            if (batch_idx + 1) % 10 == 0:
+                print(
+                    f"Batch {batch_idx + 1}/{total_train_batches} - "
+                    f"Detector Bit Loss: {bit_loss.item():.4f}"
+                )
+
         # Compute average training loss
         avg_train_detector_loss = train_detector_loss / total_train_batches
         epoch_duration = time.time() - epoch_start_time
@@ -143,37 +146,33 @@ def train(
         total_val_batches = len(val_loader)
 
         with torch.no_grad():
-            for batch_idx, (audio, labels) in enumerate(train_loader):
-                # Handle cases where train_loader returns tuples with additional metadata
-                if isinstance(audio, tuple):
-                    audio = audio[0]  # Extract the tensor if it's wrapped in a tuple
-                if isinstance(labels, tuple):
-                    labels = labels[0]
+            for val_batch_idx, (val_audio, val_labels) in enumerate(val_loader):
+                # Handle cases where val_loader returns tuples with additional metadata
+                if isinstance(val_audio, tuple):
+                    val_audio = val_audio[0]
+                if isinstance(val_labels, tuple):
+                    val_labels = val_labels[0]
 
                 # Convert audio to tensor if it's not already
-                if not isinstance(audio, torch.Tensor):
-                    raise TypeError(f"Expected 'audio' to be a tensor, but got {type(audio)}")
-                
+                if not isinstance(val_audio, torch.Tensor):
+                    raise TypeError(f"Expected 'val_audio' to be a tensor, but got {type(val_audio)}")
+
                 # Handle labels that are integers or lists of integers
-                if isinstance(labels, int):  # Single integer
-                    labels = torch.tensor([labels], dtype=torch.long)
-                elif isinstance(labels, list):  # List of integers
-                    labels = torch.tensor(labels, dtype=torch.long)
+                if isinstance(val_labels, int):  # Single integer
+                    val_labels = torch.tensor([val_labels], dtype=torch.long)
+                elif isinstance(val_labels, list):  # List of integers
+                    val_labels = torch.tensor(val_labels, dtype=torch.long)
 
                 # Ensure labels are tensors
-                if not isinstance(labels, torch.Tensor):
-                    raise TypeError(f"Expected 'labels' to be a tensor, but got {type(labels)}")
+                if not isinstance(val_labels, torch.Tensor):
+                    raise TypeError(f"Expected 'val_labels' to be a tensor, but got {type(val_labels)}")
 
                 # Move data to the device
-                val_audio = audio.to(device).unsqueeze(1)  # Add channel dimension if needed
-                val_labels = labels.to(device)
-
-                # Debug print (optional) to verify the shapes
-                print(f"Batch {batch_idx}: Audio Shape: {audio.shape}, Labels Shape: {labels.shape}")
-
+                val_audio = val_audio.to(device).unsqueeze(1)
+                val_labels = val_labels.to(device)
 
                 # Convert labels to 32-bit binary messages
-                val_message = torch.stack([(val_labels >> i) & 1 for i in range(32)], dim=-1).float()
+                val_message = torch.stack([(val_labels >> i) & 1 for i in range(32)], dim=-1).float().to(device)
 
                 # Forward pass through generator
                 val_watermarked_audio, val_embedded_ls, val_original_ls = generator(val_audio, val_message)
@@ -194,8 +193,15 @@ def train(
                 # Compute penalty-based bit-wise loss
                 val_bit_loss = penalty_based_bit_loss(val_extracted_bits, val_message)
 
-                # Accumulate validation losse s
+                # Accumulate validation losses
                 val_detector_loss += val_bit_loss.item()
+
+                # Log every 10 validation batches
+                if (val_batch_idx + 1) % 10 == 0:
+                    print(
+                        f"Validation Batch {val_batch_idx + 1}/{total_val_batches} - "
+                        f"Validation Detector Bit Loss: {val_bit_loss.item():.4f}"
+                    )
 
         avg_val_detector_loss = val_detector_loss / total_val_batches
 
