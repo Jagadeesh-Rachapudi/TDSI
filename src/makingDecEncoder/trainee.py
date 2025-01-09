@@ -69,30 +69,6 @@ def train(
             # Forward pass through the generator
             watermarked_audio, embedded_ls, original_ls = generator(audio, message)
 
-            # Ensure watermarked_audio has requires_grad=True for the backward pass
-            watermarked_audio = watermarked_audio.requires_grad_()  # This ensures the tensor is part of the computation graph
-
-            # Compute reconstruction loss for the generator
-            gen_recons_loss = torch.nn.functional.mse_loss(audio, watermarked_audio)
-
-            # Backward pass for the generator with retain_graph=True (if needed for multiple backward passes)
-            optimizer_g.zero_grad()
-            gen_recons_loss.backward()  # Retaining the graph for subsequent backward passes
-            clip_grad_norm_(generator.parameters(), max_norm=5)
-            optimizer_g.step()
-
-            # Forward pass through the generator
-            watermarked_audio, embedded_ls, original_ls = generator(audio, message)
-
-            # Compute reconstruction loss for the generator
-            gen_recons_loss = torch.nn.functional.mse_loss(audio, watermarked_audio)
-
-            # Backward pass for the generator
-            # optimizer_g.zero_grad()
-            # gen_recons_loss.backward(retain_graph=True)  # Retain the graph for the next backward pass
-            # clip_grad_norm_(generator.parameters(), max_norm=5)
-            # optimizer_g.step()
-
             # Forward pass through the detector
             probable_embedded_ls = detector_encoder(watermarked_audio)
 
@@ -117,13 +93,11 @@ def train(
             optimizer_d.step()
 
             # Accumulate losses
-            train_gen_loss += gen_recons_loss.item()
             train_detector_loss += bit_loss.item()
 
             if (batch_idx + 1) % 10 == 0:
                 print(
                     f"Batch {batch_idx + 1}/{total_train_batches} - "
-                    f"Generator Reconstruction Loss: {gen_recons_loss.item():.4f}, "
                     f"Detector Bit Loss: {bit_loss.item():.4f}"
                 )
             # Compute average training loss
@@ -131,21 +105,21 @@ def train(
             avg_train_detector_loss = train_detector_loss / total_train_batches
             epoch_duration = time.time() - epoch_start_time
 
-            print(
+        print(
                 f"Epoch {epoch + 1} Summary: "
                 f"Generator Loss: {avg_train_gen_loss:.4f}, "
                 f"Detector Loss: {avg_train_detector_loss:.4f}, "
                 f"Duration: {epoch_duration:.2f}s"
             )
 
-            # Validation loop
-            generator.eval()
-            detector_encoder.eval()
-            val_gen_loss, val_detector_loss = 0, 0
-            total_val_batches = len(val_loader)
+        # Validation loop
+        generator.eval()
+        detector_encoder.eval()
+        val_gen_loss, val_detector_loss = 0, 0
+        total_val_batches = len(val_loader)    
 
-            with torch.no_grad():
-                for val_audio, val_labels in val_loader:
+        with torch.no_grad():
+            for val_audio, val_labels in val_loader:
                     # Ensure validation audio and labels are tensors
                     if isinstance(val_audio, tuple):
                         val_audio = val_audio[0]
@@ -173,9 +147,6 @@ def train(
                     # Forward pass through generator
                     val_watermarked_audio, val_embedded_ls, val_original_ls = generator(val_audio, val_message)
 
-                    # Compute reconstruction loss for the generator
-                    val_gen_recons_loss = torch.nn.functional.mse_loss(val_audio, val_watermarked_audio)
-
                     # Forward pass through detector
                     val_probable_embedded_ls = detector_encoder(val_watermarked_audio)
 
@@ -196,19 +167,17 @@ def train(
                     val_bit_loss = torch.abs(val_extracted_bits - reshaped_val_message).mean()
 
                     # Accumulate validation losses
-                    val_gen_loss += val_gen_recons_loss.item()
                     val_detector_loss += val_bit_loss.item()
 
-            avg_val_gen_loss = val_gen_loss / total_val_batches
-            avg_val_detector_loss = val_detector_loss / total_val_batches
+        avg_val_gen_loss = val_gen_loss / total_val_batches
+        avg_val_detector_loss = val_detector_loss / total_val_batches
 
-            print(
-                f"Validation Losses: Generator Loss: {avg_val_gen_loss:.4f}, "
-                f"Detector Loss: {avg_val_detector_loss:.4f}"
-            )
+        print(
+          f"Detector Loss: {avg_val_detector_loss:.4f}"
+        )
 
             # Save the best model based on validation detector loss
-            if avg_train_detector_loss < lowest_train_detector_loss and avg_val_detector_loss < lowest_val_detector_loss:
+        if avg_train_detector_loss < lowest_train_detector_loss and avg_val_detector_loss < lowest_val_detector_loss:
                 best_model_file = f"{checkpoint_path}/BestDecEncoder.pth"
                 torch.save(
                     {
@@ -223,5 +192,4 @@ def train(
                 print(f"\n[INFO] Best model saved as: {best_model_file}")
                 lowest_train_detector_loss = avg_train_detector_loss
                 lowest_val_detector_loss = avg_val_detector_loss
-
-        print("Training completed.")
+print("Training completed.")    
