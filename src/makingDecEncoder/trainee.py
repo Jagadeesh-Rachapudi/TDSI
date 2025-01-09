@@ -153,15 +153,19 @@ def train(
                     if not isinstance(val_audio, torch.Tensor):
                         raise TypeError(f"Validation audio is not a tensor. Received type: {type(val_audio)}")
 
+                    # Ensure val_audio is moved to the correct device and has the expected dimensions
                     val_audio = val_audio.to(device).unsqueeze(1)
 
+                    # Process val_labels
                     if isinstance(val_labels, tuple):
                         val_labels = val_labels[0]
+
+                    if isinstance(val_labels, int):  # Handle cases where val_labels is an int
+                        val_labels = torch.tensor([val_labels], dtype=torch.long).to(device)
 
                     if not isinstance(val_labels, torch.Tensor):
                         raise TypeError(f"Validation labels are not a tensor. Received type: {type(val_labels)}")
 
-                    val_labels = val_labels.to(device)
 
                     # Convert labels to 32-bit binary messages
                     val_message = torch.stack([(val_labels >> i) & 1 for i in range(32)], dim=-1).float()
