@@ -8,7 +8,7 @@ from src.utils.utility_functions import find_least_important_components
 latent_dim = 128
 nbits = 32
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-best_model_path = r"D:\trainedModels\TDSI\Generator\BestGenEncoder.pth"  # Path to the pretrained model
+best_model_path = r"/content/BestGenEncoder.pth"  # Path to the pretrained model
 
 # Initialize Generator
 encoder = SEANetEncoderKeepDimension(

@@ -2,35 +2,29 @@ import os
 import time
 import torch
 from pathlib import Path
-from datetime import datetime
 from torch.nn.utils import clip_grad_norm_
 from src.utils.utility_functions import find_least_important_components
 
+
 def train(
     generator,
-    detector,
+    detector_encoder,
     train_loader,
     val_loader,
     lr_g=1e-4,
     lr_d=1e-4,
-    device=None,
+    device="cuda",
     num_epochs=100,
-    compute_perceptual_loss=None,
     checkpoint_path="./checkpoints",
     log_path="./logs/losses.csv",
-    update_csv=None,
-    initialize_csv=None,
-    scheduler_g=None,
-    scheduler_d=None,
 ):
     # Ensure checkpoint and log directories exist
     Path(checkpoint_path).mkdir(parents=True, exist_ok=True)
     Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-    initialize_csv(log_path)
 
     # Optimizers
     optimizer_g = torch.optim.Adam(generator.parameters(), lr=lr_g, weight_decay=1e-4)
-    optimizer_d = torch.optim.Adam(detector.parameters(), lr=lr_d, weight_decay=1e-4)
+    optimizer_d = torch.optim.Adam(detector_encoder.parameters(), lr=lr_d, weight_decay=1e-4)
 
     # Track the best losses for saving the best model
     lowest_train_detector_loss = float('inf')
@@ -38,20 +32,46 @@ def train(
 
     print("Starting training...")
 
+    # Enable anomaly detection
+    torch.autograd.set_detect_anomaly(True)
+
     for epoch in range(num_epochs):
         epoch_start_time = time.time()
         print(f"\nEpoch {epoch + 1}/{num_epochs}")
         generator.train()
-        detector.train()
+        detector_encoder.train()
 
         train_gen_loss, train_detector_loss = 0, 0
         total_train_batches = len(train_loader)
 
         # Training loop
         for batch_idx, (audio, labels) in enumerate(train_loader):
-            # Move audio and labels to device
-            audio = audio.to(device).unsqueeze(1)  # Add channel dimension
+            print(f"Type of audio: {type(audio)}, Shape of audio: {getattr(audio, 'shape', 'N/A')}")
+            print(f"Type of labels: {type(labels)}, Shape of labels: {getattr(labels, 'shape', 'N/A')}")
+
+            # Ensure audio is a tensor
+            if isinstance(audio, tuple):
+                audio = audio[0]
+
+            if not isinstance(audio, torch.Tensor):
+                raise TypeError(f"Audio is not a tensor. Received type: {type(audio)}")
+
+            audio = audio.to(device).unsqueeze(1)  # Add channel dimension if needed
+
+            # Ensure labels are converted to tensors
+            if isinstance(labels, tuple):
+                labels = labels[0]
+
+            if isinstance(labels, int):  # Convert integer labels to tensors
+                labels = torch.tensor([labels], dtype=torch.long)
+
+            if not isinstance(labels, torch.Tensor):
+                raise TypeError(f"Labels are not a tensor. Received type: {type(labels)}")
+
             labels = labels.to(device)
+
+            print(f"Processed Audio Shape: {audio.shape}")
+            print(f"Processed Labels Shape: {labels.shape}")
 
             # Convert labels to 32-bit binary messages
             message = torch.stack([(labels >> i) & 1 for i in range(32)], dim=-1).float().to(device)
@@ -60,36 +80,36 @@ def train(
             watermarked_audio, embedded_ls, original_ls = generator(audio, message)
 
             # Compute reconstruction loss for the generator
-            gen_recons_loss = (
-                compute_perceptual_loss(audio, watermarked_audio)
-                if compute_perceptual_loss
-                else torch.nn.functional.mse_loss(audio, watermarked_audio)
-            )
+            gen_recons_loss = torch.nn.functional.mse_loss(audio, watermarked_audio)
 
             # Forward pass through the detector
-            probable_embedded_ls = detector.encoder(watermarked_audio)
+            probable_embedded_ls = detector_encoder(watermarked_audio)
 
             # Find bit positions using PCA
-            original_ls_np = original_ls.cpu().numpy().reshape(-1, embedded_ls.shape[1])
+            original_ls_np = original_ls.detach().cpu().numpy().reshape(-1, embedded_ls.shape[1])
             bit_positions, _ = find_least_important_components(original_ls_np, message.size(1))
             bit_positions_tensor = torch.tensor(bit_positions, device=device)
 
             # Extract probable embedded bits
-            extracted_bits = torch.sigmoid(probable_embedded_ls[:, bit_positions_tensor, :]).squeeze(-1)
+            probable_embedded_ls_clone = probable_embedded_ls.clone()  # Prevent in-place modification
+            extracted_bits = torch.sigmoid(probable_embedded_ls_clone[:, bit_positions_tensor, :]).mean(dim=-1)
+
+            # Reshape the message to match the shape of extracted_bits
+            reshaped_message = message.view_as(extracted_bits)
 
             # Compute bit-wise loss for the detector
-            bit_loss = torch.abs(extracted_bits - message).mean()
+            bit_loss = torch.abs(extracted_bits - reshaped_message).mean()
 
             # Backward pass for generator
             optimizer_g.zero_grad()
-            gen_recons_loss.backward()
+            gen_recons_loss.backward(retain_graph=True)  # Retain the graph for detector loss
             clip_grad_norm_(generator.parameters(), max_norm=5)
             optimizer_g.step()
 
             # Backward pass for detector
             optimizer_d.zero_grad()
             bit_loss.backward()
-            clip_grad_norm_(detector.parameters(), max_norm=5)
+            clip_grad_norm_(detector_encoder.parameters(), max_norm=5)
             optimizer_d.step()
 
             # Accumulate losses
@@ -117,13 +137,27 @@ def train(
 
         # Validation loop
         generator.eval()
-        detector.eval()
+        detector_encoder.eval()
         val_gen_loss, val_detector_loss = 0, 0
         total_val_batches = len(val_loader)
 
         with torch.no_grad():
             for val_audio, val_labels in val_loader:
-                val_audio = val_audio.to(device).unsqueeze(1)  # Add channel dimension
+                # Ensure validation audio and labels are tensors
+                if isinstance(val_audio, tuple):
+                    val_audio = val_audio[0]
+
+                if not isinstance(val_audio, torch.Tensor):
+                    raise TypeError(f"Validation audio is not a tensor. Received type: {type(val_audio)}")
+
+                val_audio = val_audio.to(device).unsqueeze(1)
+
+                if isinstance(val_labels, tuple):
+                    val_labels = val_labels[0]
+
+                if not isinstance(val_labels, torch.Tensor):
+                    raise TypeError(f"Validation labels are not a tensor. Received type: {type(val_labels)}")
+
                 val_labels = val_labels.to(device)
 
                 # Convert labels to 32-bit binary messages
@@ -133,22 +167,26 @@ def train(
                 val_watermarked_audio, val_embedded_ls, val_original_ls = generator(val_audio, val_message)
 
                 # Compute reconstruction loss for the generator
-                val_gen_recons_loss = (
-                    compute_perceptual_loss(val_audio, val_watermarked_audio)
-                    if compute_perceptual_loss
-                    else torch.nn.functional.mse_loss(val_audio, val_watermarked_audio)
-                )
+                val_gen_recons_loss = torch.nn.functional.mse_loss(val_audio, val_watermarked_audio)
 
                 # Forward pass through detector
-                val_probable_embedded_ls = detector.encoder(val_watermarked_audio)
+                val_probable_embedded_ls = detector_encoder(val_watermarked_audio)
+
+                # Find bit positions using PCA (ensure detachment)
+                val_original_ls_np = val_original_ls.detach().cpu().numpy().reshape(-1, val_embedded_ls.shape[1])
+                bit_positions, _ = find_least_important_components(val_original_ls_np, val_message.size(1))
+                bit_positions_tensor = torch.tensor(bit_positions, device=device)
 
                 # Extract probable embedded bits
                 val_extracted_bits = torch.sigmoid(
-                    val_probable_embedded_ls[:, bit_positions_tensor, :]
-                ).squeeze(-1)
+                    val_probable_embedded_ls[:, bit_positions_tensor, :].clone()
+                ).mean(dim=-1)  # Take the mean along the time dimension
+
+                # Reshape the message to match the shape of val_extracted_bits
+                reshaped_val_message = val_message.view_as(val_extracted_bits)
 
                 # Compute bit-wise loss for the detector
-                val_bit_loss = torch.abs(val_extracted_bits - val_message).mean()
+                val_bit_loss = torch.abs(val_extracted_bits - reshaped_val_message).mean()
 
                 # Accumulate validation losses
                 val_gen_loss += val_gen_recons_loss.item()
@@ -162,12 +200,6 @@ def train(
             f"Detector Loss: {avg_val_detector_loss:.4f}"
         )
 
-        # Scheduler step
-        if scheduler_g is not None:
-            scheduler_g.step(avg_val_gen_loss)
-        if scheduler_d is not None:
-            scheduler_d.step(avg_val_detector_loss)
-
         # Save the best model based on validation detector loss
         if avg_train_detector_loss < lowest_train_detector_loss and avg_val_detector_loss < lowest_val_detector_loss:
             best_model_file = f"{checkpoint_path}/BestDecEncoder.pth"
@@ -175,33 +207,13 @@ def train(
                 {
                     "epoch": epoch + 1,
                     "generator_state_dict": generator.state_dict(),
-                    "detector_state_dict": detector.state_dict(),
+                    "detector_state_dict": detector_encoder.state_dict(),
                     "optimizer_g_state_dict": optimizer_g.state_dict(),
                     "optimizer_d_state_dict": optimizer_d.state_dict(),
-                    "scheduler_g_state_dict": scheduler_g.state_dict() if scheduler_g else None,
-                    "scheduler_d_state_dict": scheduler_d.state_dict() if scheduler_d else None,
-                    "training_hyperparams": {
-                        "learning_rate_g": lr_g,
-                        "learning_rate_d": lr_d,
-                        "batch_size": train_loader.batch_size,
-                        "num_epochs": num_epochs,
-                        "latent_dim": generator.encoder.dimension,
-                        "nbits": 32,
-                    },
-                    "loss_metrics": {
-                        "train_gen_loss": avg_train_gen_loss,
-                        "train_detector_loss": avg_train_detector_loss,
-                        "val_gen_loss": avg_val_gen_loss,
-                        "val_detector_loss": avg_val_detector_loss,
-                    },
                 },
                 best_model_file,
             )
             print(f"\n[INFO] Best model saved as: {best_model_file}")
-            print(f"Training Generator Loss: {avg_train_gen_loss:.6f}")
-            print(f"Training Detector Loss: {avg_train_detector_loss:.6f}")
-            print(f"Validation Generator Loss: {avg_val_gen_loss:.6f}")
-            print(f"Validation Detector Loss: {avg_val_detector_loss:.6f}")
             lowest_train_detector_loss = avg_train_detector_loss
             lowest_val_detector_loss = avg_val_detector_loss
 
