@@ -1,5 +1,5 @@
 import torch
-from src.makingGenEncoder.modelArchitectrue import AudioSealWM, Detector
+from src.genEncoder.models import AudioSealWM, Detector
 from src.allModels.SEANet import SEANetEncoderKeepDimension, SEANetDecoder
 
 # Path to the pretrained model

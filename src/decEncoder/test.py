@@ -1,6 +1,6 @@
 import torch
 import torchaudio
-from src.makingDecEncoder.test_modelArchitecure import AudioSealWM, Detector
+from src.decEncoder.models import AudioSealWM, Detector
 from src.allModels.SEANet import SEANetDecoder, SEANetEncoderKeepDimension
 from src.utils.utility_functions import find_least_important_components
 
