@@ -26,6 +26,8 @@ __pycache__
 /data/train
 /data/validate
 
+data\test
+
 __pycache__
 
 *.pth
