@@ -31,3 +31,6 @@ data\test
 __pycache__
 
 *.pth
+
+*.wav
+*.ogg
